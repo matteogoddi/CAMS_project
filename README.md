@@ -4,7 +4,7 @@
 
 1. pull changes
    ```bash
-   git push origin main
+   git pull origin main
    ```
    
 2. push changes
