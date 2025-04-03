@@ -47,10 +47,10 @@ for k in range(N):
     opti.subject_to(X[:, k+1] == x_next)
 
 
-opti.subject_to(opti.bounded(-5, U[0, :], 5))
-opti.subject_to(opti.bounded(-5, U[1, :], 5))
-opti.subject_to(opti.bounded(-5, U[2, :], 5))
-opti.subject_to(opti.bounded(-5, U[3, :], 5))
+opti.subject_to(opti.bounded(-20, U[:, :], 20))
+# opti.subject_to(opti.bounded(-5, U[1, :], 5))
+# opti.subject_to(opti.bounded(-5, U[2, :], 5))
+# opti.subject_to(opti.bounded(-5, U[3, :], 5))
 
 cost = ca.mtimes([(X[:,N]-x_goal).T,Q,(X[:,N]-x_goal)])
 opti.minimize(cost)
@@ -70,12 +70,11 @@ else:
 
 X_opt = sol.value(X)
 U_opt = sol.value(U)
-print(X_opt)
 
 fig1, fig2 = create_plots_sim1(X_opt, U_opt, x_goal, T, N)
 
-fig1.savefig("images/TO/states_plot_final_cost.png", bbox_inches='tight')
-fig2.savefig("images/TO/controls_plot_final_cost.png", bbox_inches='tight')
+fig1.savefig("images/TO/states_plot.png", bbox_inches='tight')
+fig2.savefig("images/TO/controls_plot.png", bbox_inches='tight')
 
 # ani = create_vehicle_animation(X_opt[0,:], X_opt[1,:], X_opt[2,:], X_opt[6,:], l_f=0.18, l_r=0.18, 
 #                                track_width=0.3, interval=100, 
@@ -84,14 +83,14 @@ fig2.savefig("images/TO/controls_plot_final_cost.png", bbox_inches='tight')
 time_states = np.linspace(0, T, N+1)
 time_controls = time_states[:-1]
 
-state_names = ['X (m)', 'Y (m)', 'phi (rad)', 'v_x (m/s)', 'v_y (m/s)', 'r (rad/s)', 'delta (rad)']
+state_names   = ['X (m)', 'Y (m)', 'Z (m)', 'phi (rad)', 'theta (rad)', 'psi (rad)',
+    'v_x (m/s)', 'v_y (m/s)', 'v_z (m/s)', 'phi_dot (rad/s)', 'theta_dot (rad/s)', 'psi_dot (rad/s)']
 df_states = pd.DataFrame(X_opt.T, columns=state_names)
 df_states.insert(0, 'time (s)', time_states)
+df_states.to_csv("csv/TO/states.csv", index=False)
 
-df_states.to_csv("csv/TO/states_final_cost.csv", index=False)
-
-control_names = ['F_x (N)', 'delta_dot (rad/s)']
+control_names = ['U_1 (N)', 'U_2 (N)', 'U_3 (N)', 'U_4 (N)']
 df_controls = pd.DataFrame(U_opt.T, columns=control_names)
 df_controls.insert(0, 'time (s)', time_controls)
-df_controls.to_csv("csv/TO/controls_final_cost.csv", index=False)
+df_controls.to_csv("csv/TO/controls.csv", index=False)
 

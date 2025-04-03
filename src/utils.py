@@ -159,12 +159,13 @@ def create_plots_sim1(X_opt, U_opt, x_goal, T, N):
     time   = np.linspace(0, T, N+1)
     time_u = time[:-1]
     
-    state_names   = ['X (m)', 'Y (m)', r'$\phi$ (rad)', r'$v_x$ (m/s)', r'$v_y$ (m/s)', r'$r$ (rad/s)', r'$\theta$ (rad)']
-    control_names = [r'$F_x$ (N)', r'$\dot{\theta}$ (rad/s)']
+    state_names   = ['X (m)', 'Y (m)', 'Z (m)', r'$\phi$ (rad)', r'$\theta$', r'$\psi$',
+       r'$v_x$ (m/s)', r'$v_y$ (m/s)', r'$v_z$ (rad/s)', r'$\phi_{dot}$ (rad)', r'$\theta_{dot}$', r'$\psi_{dot}$']
+    control_names = [r'$U_1$', r'$U_2$', r'$U_3$', r'$U_4$']
 
     fig1 = plt.figure(figsize=(12, 8))
     for i in range(12):
-        ax = fig1.add_subplot(4, 2, i+1)
+        ax = fig1.add_subplot(6, 2, i+1)
         ax.plot(time, X_opt[i, :], label=state_names[i])
         ax.axhline(y=x_goal[i], color='r', linestyle='--', label='Goal')
         ax.set_xlabel('Time (s)')
@@ -175,7 +176,7 @@ def create_plots_sim1(X_opt, U_opt, x_goal, T, N):
     
     fig2 = plt.figure(figsize=(12, 4))
     for i in range(4):
-        ax = fig2.add_subplot(1, 2, i+1)
+        ax = fig2.add_subplot(2, 2, i+1)
         ax.plot(time_u, U_opt[i, :], label=control_names[i])
         ax.set_xlabel('Time (s)')
         ax.set_ylabel(control_names[i])
@@ -206,12 +207,13 @@ def create_plots_sim2(X_opt, U_opt, X_ref, U_ref, T, N):
     time   = np.linspace(0, T, N+1)
     time_u = time[:-1]
     
-    state_names   = ['X (m)', 'Y (m)', r'$\phi$ (rad)', r'$v_x$ (m/s)', r'$v_y$ (m/s)', r'$r$ (rad/s)', r'$\theta$ (rad)']
-    control_names = [r'$F_x$ (N)', r'$\dot{\theta}$ (rad/s)']
+    state_names   = ['X (m)', 'Y (m)', 'Z (m)', r'$\phi$ (rad)', r'$\theta$', r'$\psi$',
+       r'$v_x$ (m/s)', r'$v_y$ (m/s)', r'$v_z$ (rad/s)', r'$\phi_{dot}$ (rad)', r'$\theta_{dot}$', r'$\psi_{dot}$']
+    control_names = [r'$U_1$', r'$U_2$', r'$U_3$', r'$U_4$']
     
     fig1 = plt.figure(figsize=(12, 8))
-    for i in range(7):
-        ax = fig1.add_subplot(4, 2, i+1)
+    for i in range(12):
+        ax = fig1.add_subplot(6, 2, i+1)
         ax.plot(time, X_opt[i, :], label=f'{state_names[i]} MPC')
         ax.plot(time, X_ref[i, :], label=f'{state_names[i]} TO', linestyle='--')
         ax.set_xlabel('Time (s)')
@@ -221,8 +223,8 @@ def create_plots_sim2(X_opt, U_opt, X_ref, U_ref, T, N):
     fig1.tight_layout()
     
     fig2 = plt.figure(figsize=(12, 4))
-    for i in range(2):
-        ax = fig2.add_subplot(1, 2, i+1)
+    for i in range(4):
+        ax = fig2.add_subplot(2, 2, i+1)
         ax.plot(time_u, U_opt[i, :], label=f'{control_names[i]} MPC')
         ax.plot(time_u, U_ref[i, :], label=f'{control_names[i]} TO', linestyle='--')
         ax.set_xlabel('Time (s)')
@@ -231,28 +233,7 @@ def create_plots_sim2(X_opt, U_opt, X_ref, U_ref, T, N):
         ax.grid(True)
     fig2.tight_layout() 
     
-    v_blend_min = V_BLEND_MIN
-    v_blend_max = V_BLEND_MAX
-    phi   = v_blend_min + 0.5 * (v_blend_max - v_blend_min)
-    omega = 2 * np.pi / (v_blend_max - v_blend_min)
-    v_square = X_opt[3, :]**2 + X_opt[4, :]**2
-    lambda_vals = 0.5 * (np.tanh(omega * (v_square**0.5 - phi)) + 1)
-    
-    v_square_ref = X_ref[3, :]**2 + X_ref[4, :]**2
-    lambda_ref = 0.5 * (np.tanh(omega * (v_square_ref**0.5 - phi)) + 1) 
-
-
-    fig3 = plt.figure(figsize=(10, 5))
-    ax5 = fig3.add_subplot(1, 1, 1)
-    ax5.plot(time, lambda_vals, label=r'MPC $\lambda$')
-    ax5.plot(time, lambda_ref, label='TO $\lambda$', linestyle='--')
-    ax5.set_xlabel('Time(s)')
-    ax5.set_ylabel(r'$\lambda$')
-    ax5.set_title('Evolution of $\lambda$ over time')
-    ax5.legend()
-    ax5.grid(True)
-    
-    return fig1, fig2, fig3
+    return fig1, fig2
 
 def create_plots_sim3(X_opt, U_opt, x_goal, T, N):
     """

@@ -19,9 +19,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 import casadi as ca
 import numpy as np
 import pandas as pd
-from src.utils import *
-from src.constants import *
+from utils import *
+from constants import *
 
+#EDMD
+A, B = EDMD()
+
+#MPC
 T = TIME
 dt = T / N
 
@@ -33,17 +37,17 @@ x_history = []
 u_history = []  
 M = 10  # MPC horizon
 
-Q = np.diag([1, 1, 1])
+Q = np.diag([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
 R = np.diag([0.1, 0.1, 0.1, 0.1])
 
-# df_states = pd.read_csv("csv/TO/states_final_cost.csv")
-# state_columns = ['X (m)', 'Y (m)', 'phi (rad)', 'v_x (m/s)', 'v_y (m/s)', 'r (rad/s)', 'delta (rad)']
-# X_ref = df_states[state_columns].to_numpy().T
+df_states = pd.read_csv("csv/TO/states.csv")
+state_columns = ['X (m)', 'Y (m)', 'Z (m)', 'phi (rad)', 'theta (rad)', 'psi (rad)',
+    'v_x (m/s)', 'v_y (m/s)', 'v_z (m/s)', 'phi_dot (rad/s)', 'theta_dot (rad/s)', 'psi_dot (rad/s)']
+X_ref = df_states[state_columns].to_numpy().T
 
-t = ca.linspace(0, 1, N+1)
-X_ref = ca.horzcat(x_init[0] + t * (x_goal[0] - x_init[0]),
-         x_init[1] + t * (x_goal[1] - x_init[1]),
-         x_init[2] + x_goal[2] * t * (1 - t)).T
+df_controls = pd.read_csv("csv/TO/controls.csv")
+control_columns = ['U_1 (N)', 'U_2 (N)', 'U_3 (N)', 'U_4 (N)']
+U_ref = df_controls[control_columns].to_numpy().T
 
 total_time = 0
 
@@ -69,19 +73,19 @@ for t in range(N):
         x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
         opti_mpc.subject_to(X_mpc[:, k+1] == x_next)
 
-    opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[0, :], 5))
-    opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[1, :], 5))
-    opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[2, :], 5))
-    opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[3, :], 5))
+    opti_mpc.subject_to(opti_mpc.bounded(-20, U_mpc[0, :], 20))
+    # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[1, :], 5))
+    # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[2, :], 5))
+    # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[3, :], 5))
     
     opti_mpc.subject_to(X_mpc[:, 0] == x_current)
 
     tracking_cost = 0
     for k in range(M + 1):
         if t + k < N:
-            tracking_cost += ca.mtimes([(X_mpc[0:3, k] - X_ref[:, t + k]).T, Q, (X_mpc[0:3, k] - X_ref[:, t + k])])
+            tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, t + k]).T, Q, (X_mpc[:, k] - X_ref[:, t + k])])
         else:
-            tracking_cost += ca.mtimes([(X_mpc[0:3, k] - X_ref[:, N]).T, Q, (X_mpc[0:3, k] - X_ref[:, N])])
+            tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, N]).T, Q, (X_mpc[:, k] - X_ref[:, N])])
         #tracking_cost += ca.mtimes([(U_mpc[:, k]).T, R, (U_mpc[:, k])])
     opti_mpc.minimize(tracking_cost)
 
@@ -100,30 +104,29 @@ for t in range(N):
 x_history.append(np.array(x_current))
 X_opt = np.array(x_history).T
 U_opt = np.array(u_history).T  
-print(X_opt)
 
-fig1, fig2, fig3 = create_plots_sim2(X_opt, U_opt, X_ref, U_ref, T, N)
+fig1, fig2 = create_plots_sim2(X_opt, U_opt, X_ref, U_ref, T, N)
 print("Total time: ", total_time)
 print("Final states: ", X_opt[0:3,N])
-fig1.savefig("images/MPC/states_plot_final_cost.png", bbox_inches='tight')
-fig2.savefig("images/MPC/controls_plot_final_cost.png", bbox_inches='tight')
-fig3.savefig("images/MPC/lambda_plot_final_cost.png", bbox_inches='tight')
+fig1.savefig("images/MPC/states_plot.png", bbox_inches='tight')
+fig2.savefig("images/MPC/controls_plot.png", bbox_inches='tight')
 
-ani = create_vehicle_animation(X_opt[0,:], X_opt[1,:], X_opt[2,:], X_opt[6, :], l_f=0.18, l_r=0.18, 
-                               track_width=0.3, interval=100, 
-                               save_filename='videos/MPC-1/vehicle_animation_final_cost.gif', fps=10, name = "Trajectory Vehicle Animation with MPC using TO with $J = (X_N-X_g)^TQ(X_N-X_g)$")
+# ani = create_vehicle_animation(X_opt[0,:], X_opt[1,:], X_opt[2,:], X_opt[6, :], l_f=0.18, l_r=0.18, 
+#                                track_width=0.3, interval=100, 
+#                                save_filename='videos/MPC-1/vehicle_animation_final_cost.gif', fps=10, name = "Trajectory Vehicle Animation with MPC using TO with $J = (X_N-X_g)^TQ(X_N-X_g)$")
 
 time_states = np.linspace(0, T, N+1)
 time_controls = time_states[:-1]
 
-state_names = ['X (m)', 'Y (m)', 'phi (rad)', 'v_x (m/s)', 'v_y (m/s)', 'r (rad/s)', 'delta (rad)']
+state_names   = ['X (m)', 'Y (m)', 'Z (m)', 'phi (rad)', 'theta (rad)', 'psi (rad)',
+    'v_x (m/s)', 'v_y (m/s)', 'v_z (m/s)', 'phi_dot (rad/s)', 'theta_dot (rad/s)', 'psi_dot (rad/s)']
 df_states = pd.DataFrame(X_opt.T, columns=state_names)
 df_states.insert(0, 'time (s)', time_states) 
 
-df_states.to_csv("csv/MPC-1/states_final_cost.csv", index=False)
+df_states.to_csv("csv/MPC/states.csv", index=False)
 
-control_names = ['F_x (N)', 'delta_dot (rad/s)']
+control_names = ['U_1 (N)', 'U_2 (N)', 'U_3 (N)', 'U_4 (N)']
 df_controls = pd.DataFrame(U_opt.T, columns=control_names)
 df_controls.insert(0, 'time (s)', time_controls)
-df_controls.to_csv("csv/MPC-1/controls_final_cost.csv", index=False)
+df_controls.to_csv("csv/MPC/controls.csv", index=False)
 
