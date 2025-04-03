@@ -21,21 +21,25 @@ import numpy as np
 import pandas as pd
 from utils import *
 from constants import *
+from EDMD import EDMD
 
 #EDMD
-A, B = EDMD()
-
-#MPC
-T = TIME
-dt = T / N
-
 #x_init = [np.random.uniform(-0.25, 0.25), np.random.uniform(-0.25, 0.25), 0, 0, 0, 0, 0]
 x_init = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]   
 x_goal = [4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0]   
+T = TIME
+dt = T / N
+
+Y_x = np.zeros((12, m))
+Y_x[:, 0] = x_init
+Y_u = np.random.uniform(-10,10, (4,m))
+
+A, B = EDMD(Y_x,Y_u)
+
+#MPC
 x_current = np.array(x_init)
 x_history = []  
 u_history = []  
-M = 10  # MPC horizon
 
 Q = np.diag([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
 R = np.diag([0.1, 0.1, 0.1, 0.1])
@@ -61,6 +65,7 @@ for t in range(N):
     X_mpc = opti_mpc.variable(12, M + 1)
     U_mpc = opti_mpc.variable(4, M)
 
+    #MPC predictor, substitute with linearized discretized model
     for k in range(M):
         x_k = X_mpc[:, k]
         u_k = U_mpc[:, k]
@@ -93,6 +98,7 @@ for t in range(N):
     X_mpc_opt = sol_mpc.value(X_mpc)
     U_mpc_opt = sol_mpc.value(U_mpc)
     
+    #actual feedback, substitute with RK4
     x_current = X_mpc_opt[:, 1] 
     u_current = U_mpc_opt[:, 0]
 
@@ -130,3 +136,5 @@ df_controls = pd.DataFrame(U_opt.T, columns=control_names)
 df_controls.insert(0, 'time (s)', time_controls)
 df_controls.to_csv("csv/MPC/controls.csv", index=False)
 
+print(np.shape(A))
+print(np.shape(B))
