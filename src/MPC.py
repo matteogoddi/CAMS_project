@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 from utils import *
 from constants import *
-from EDMD import EDMD
 
 #EDMD
 #x_init = [np.random.uniform(-0.25, 0.25), np.random.uniform(-0.25, 0.25), 0, 0, 0, 0, 0]
@@ -30,13 +29,46 @@ x_goal = [4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 T = TIME
 dt = T / N
 
+#Initialization of the observables
 Y_x = np.zeros((12, m))
 Y_x[:, 0] = x_init
 Y_u = np.random.uniform(-10,10, (4,m))
+Z = np.zeros((12, m))
 
-A, B = EDMD(Y_x,Y_u)
+#solve the model m times with the inputs y_u
+for k in range(m-1):
+    x_k = x_init
+    u_k = Y_u[:, k]
+
+    k1 = f(x_k, u_k)
+    k2 = f(x_k + dt/2 * k1, u_k)
+    k3 = f(x_k + dt/2 * k2, u_k)
+    k4 = f(x_k + dt * k3, u_k)
+
+    x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+    x_init = x_next
+
+    #obtain the observables
+    if k != m-1:
+        Y_x[0, k+1] = x_next[0]
+        Y_x[1, k+1] = x_next[1]
+        Y_x[2, k+1] = x_next[2]
+        Y_x[3, k+1] = x_next[0]**2
+        Y_x[4, k+1] = x_next[1]**2
+        Y_x[5, k+1] = x_next[2]**2
+        Y_x[6, k+1] = x_next[0]**2*x_next[1]
+        Y_x[7, k+1] = x_next[0]**2*x_next[2]
+        Y_x[8, k+1] = x_next[1]**2*x_next[2]
+        Y_x[9, k+1] = x_next[1]**2*x_next[0]
+        Y_x[10, k+1] = x_next[2]**2*x_next[0]
+        Y_x[11, k+1] = x_next[2]**2*x_next[1]
+    Z[:, k] = Y_x[:,k+1]
+
+Y = np.vstack((Y_x, Y_u))
+A, B = EDMD(Z,Y)
 
 #MPC
+x_init = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  
 x_current = np.array(x_init)
 x_history = []  
 u_history = []  
@@ -101,6 +133,8 @@ for t in range(N):
     #actual feedback, substitute with RK4
     x_current = X_mpc_opt[:, 1] 
     u_current = U_mpc_opt[:, 0]
+
+    #compute again A,B with the new x_current
 
     x_history.append(np.array( X_mpc_opt[:, 0]))  
     u_history.append(np.array(u_current))
