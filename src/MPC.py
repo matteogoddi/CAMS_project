@@ -33,7 +33,7 @@ dt = T / N
 #Initialization of the observables
 Y_x = np.zeros((12, m))
 Y_x[:, 0] = x_init
-Y_u = np.random.uniform(-2,2, (4,m))
+Y_u = np.random.uniform(-0.00001,0.00001, (4,m))
 Z = np.zeros((12, m))
 
 #solve the model m times with the inputs y_u
@@ -74,6 +74,18 @@ df_A.to_csv("csv/MPC/A.csv", index=False)
 df_B = pd.DataFrame(B)
 df_B.to_csv("csv/MPC/B.csv", index=False)
 
+# compute the response of both models to check the accuracy of the linear model
+x_next1 = A @ x_init + B @ Y_u[:, 0]
+k1 = f(x_init, Y_u[:, 0])
+k2 = f(x_init + dt/2 * k1, Y_u[:, 0])
+k3 = f(x_init + dt/2 * k2, Y_u[:, 0])
+k4 = f(x_init + dt * k3, Y_u[:, 0])
+
+x_next2 = x_init + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+
+print("x_next: ", x_next1)
+print("x_next2: ", x_next2)
+
 #MPC
 x_init = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  
 x_current = np.array(x_init)
@@ -97,6 +109,8 @@ total_time = 0
 for t in range(N):
 
     print("Iteration: ", t)
+    print("x_next1: ", x_next1)
+    print("x_next2: ", x_next2)
     opti_mpc = ca.Opti()
 
     p_opts = {"expand": True}
