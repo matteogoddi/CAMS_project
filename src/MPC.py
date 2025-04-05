@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 from utils import *
 from constants import *
+from scipy.linalg import expm
 
 #EDMD
 #x_init = [np.random.uniform(-0.25, 0.25), np.random.uniform(-0.25, 0.25), 0, 0, 0, 0, 0]
@@ -73,8 +74,8 @@ x_current = np.array(x_init)
 x_history = []  
 u_history = []  
 
-Q = np.diag([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-R = np.diag([0.1, 0.1, 0.1, 0.1])
+Q = np.diag([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])*5*10e7
+R = np.diag([1, 1, 1, 1])
 
 df_states = pd.read_csv("csv/TO/states.csv")
 state_columns = ['X (m)', 'Y (m)', 'Z (m)', 'phi (rad)', 'theta (rad)', 'psi (rad)',
@@ -88,6 +89,8 @@ U_ref = df_controls[control_columns].to_numpy().T
 total_time = 0
 
 for t in range(N):
+
+    print("Iteration: ", t)
     opti_mpc = ca.Opti()
 
     p_opts = {"expand": True}
@@ -102,15 +105,13 @@ for t in range(N):
         x_k = X_mpc[:, k]
         u_k = U_mpc[:, k]
 
-        k1 = f(x_k, u_k)
-        k2 = f(x_k + dt/2 * k1, u_k)
-        k3 = f(x_k + dt/2 * k2, u_k)
-        k4 = f(x_k + dt * k3, u_k)
-
-        x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+        Ad = expm(A * dt)
+        Bd = np.linalg.solve(A, (Ad - np.eye(A.shape[0])) @ B)
+        
+        x_next = Ad @ x_k + Bd @ u_k
         opti_mpc.subject_to(X_mpc[:, k+1] == x_next)
 
-    opti_mpc.subject_to(opti_mpc.bounded(-20, U_mpc[0, :], 20))
+    opti_mpc.subject_to(opti_mpc.bounded(-10, U_mpc[:, :], 10))
     # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[1, :], 5))
     # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[2, :], 5))
     # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[3, :], 5))
@@ -123,20 +124,58 @@ for t in range(N):
             tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, t + k]).T, Q, (X_mpc[:, k] - X_ref[:, t + k])])
         else:
             tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, N]).T, Q, (X_mpc[:, k] - X_ref[:, N])])
-        #tracking_cost += ca.mtimes([(U_mpc[:, k]).T, R, (U_mpc[:, k])])
+        if k<(M):
+            tracking_cost += ca.mtimes([(U_mpc[:, k]).T, R, (U_mpc[:, k])])
     opti_mpc.minimize(tracking_cost)
 
     sol_mpc = opti_mpc.solve()
     X_mpc_opt = sol_mpc.value(X_mpc)
     U_mpc_opt = sol_mpc.value(U_mpc)
     
-    #actual feedback, substitute with RK4
-    x_current = X_mpc_opt[:, 1] 
+    #actual feedback
+    k1 = f(X_mpc_opt[:,0], U_mpc_opt[:, 0])
+    k2 = f(X_mpc_opt[:,0] + dt/2 * k1, U_mpc_opt[:, 0])
+    k3 = f(X_mpc_opt[:,0] + dt/2 * k2, U_mpc_opt[:, 0])
+    k4 = f(X_mpc_opt[:,0] + dt * k3, U_mpc_opt[:, 0])
+    x_current = x_current + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
     u_current = U_mpc_opt[:, 0]
 
-    #compute again A,B with the new x_current
+    #compute again A,B 
+    observables_y = np.zeros((12, 1))
+    observables_y[0] = X_mpc_opt[0, 0]
+    observables_y[1] = X_mpc_opt[1, 0]
+    observables_y[2] = X_mpc_opt[2, 0]
+    observables_y[3] = X_mpc_opt[0, 0]**2
+    observables_y[4] = X_mpc_opt[1, 0]**2
+    observables_y[5] = X_mpc_opt[2, 0]**2
+    observables_y[6] = X_mpc_opt[0, 0]**2*X_mpc_opt[1, 0]
+    observables_y[7] = X_mpc_opt[0, 0]**2*X_mpc_opt[2, 0]
+    observables_y[8] = X_mpc_opt[1, 0]**2*X_mpc_opt[2, 0]
+    observables_y[9] = X_mpc_opt[1, 0]**2*X_mpc_opt[0, 0]
+    observables_y[10] = X_mpc_opt[2, 0]**2*X_mpc_opt[0, 0]
+    observables_y[11] = X_mpc_opt[2, 0]**2*X_mpc_opt[1, 0]
+    
+    observables_z = np.zeros((12, 1))
+    observables_z[0] = x_current[0]
+    observables_z[1] = x_current[1]
+    observables_z[2] = x_current[2]
+    observables_z[3] = x_current[0]**2
+    observables_z[4] = x_current[1]**2
+    observables_z[5] = x_current[2]**2
+    observables_z[6] = x_current[0]**2*x_current[1]
+    observables_z[7] = x_current[0]**2*x_current[2]
+    observables_z[8] = x_current[1]**2*x_current[2]
+    observables_z[9] = x_current[1]**2*x_current[0]
+    observables_z[10] = x_current[2]**2*x_current[0]
+    observables_z[11] = x_current[2]**2*x_current[1]
 
-    x_history.append(np.array( X_mpc_opt[:, 0]))  
+    Y_x = np.hstack((Y_x[:, 1:], observables_y))
+    Y_u = np.hstack((Y_u[:, 1:], U_mpc_opt[:, 0].reshape(-1, 1)))
+    Z = np.hstack((Z[:, 1:], observables_z))
+    Y = np.vstack((Y_x, Y_u))
+    A,B = EDMD(Z,Y)
+
+    x_history.append(np.array(X_mpc_opt[:, 0]))  
     u_history.append(np.array(u_current))
 
     total_time += sol_mpc.stats()['t_proc_total']

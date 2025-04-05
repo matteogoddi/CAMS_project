@@ -43,6 +43,9 @@ def EDMD(Z,Y):
     B_imag = np.imag(U_z.T) @ Z @ np.imag(V_y) @ S_y_inv @ np.imag(U_2.T)
     B = B_real + 1j * B_imag
 
+    A = np.array(A, dtype=float)
+    B = np.array(B, dtype=float)
+
     return A,B
 
 def f(in1, in2):
