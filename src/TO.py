@@ -47,7 +47,7 @@ for k in range(N):
     opti.subject_to(X[:, k+1] == x_next)
 
 
-opti.subject_to(opti.bounded(-10, U[:, :], 10))
+opti.subject_to(opti.bounded(-0.5, U[:, :], 0.5))
 # opti.subject_to(opti.bounded(-5, U[1, :], 5))
 # opti.subject_to(opti.bounded(-5, U[2, :], 5))
 # opti.subject_to(opti.bounded(-5, U[3, :], 5))

@@ -8,39 +8,43 @@ import casadi as ca
 from constants import *
 
 def EDMD(Z,Y):
-    YYT = Y @ Y.T  # Matrice simmetrica positiva
-    eigvals, U_y = np.linalg.eig(YYT)  # Autovalori e autovettori di A^T A
-    S_y = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
-    V_y = Y.T @ U_y @ ca.inv(S_y + 1e-6)  # Aggiungo 1e-6 per stabilità numerica
+    # YYT = Y @ Y.T  # Matrice simmetrica positiva
+    # eigvals, U_y = np.linalg.eig(YYT)  # Autovalori e autovettori di A^T A
+    # S_y = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
+    # Vh_y_real = ca.inv(S_y + 1e-6) @ np.real(U_y.T) @ Y
+    # Vh_y_imag = ca.inv(S_y + 1e-6) @ -np.imag(U_y.T) @ Y
+    # Vh_y = Vh_y_real + 1j * Vh_y_imag
     
-    # U_y, S_y, Vh_y = np.linalg.svd(Y)
-    # S_y = np.diag(S_y)
-    # print(np.shape(S_y))
-    # #print(S_y)
-    # print(np.shape(U_y))
-    # print(np.shape(Vh_y))
+    U_y, S, Vh_y = np.linalg.svd(Y)
+    S_y = np.zeros((Y.shape[0], Y.shape[1]))
+    np.fill_diagonal(S_y, S)
+
     U_1 = U_y[:12, :]
     U_2 = U_y[12:, :]
 
     #compute svd of Z
-    ZZT = Z @ Z.T  # Matrice simmetrica positiva
-    eigvals, U_z = np.linalg.eig(ZZT)  # Autovalori e autovettori di A^T A
-    S_z = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
-    V_z = Z.T @ U_z @ ca.inv(S_z + 1e-6)  # Aggiungo 1e-6 per stabilità numerica
-    #U_z, S_z, Vh_z = np.linalg.svd(Z)
+    # ZZT = Z @ Z.T  # Matrice simmetrica positiva
+    # eigvals, U_z = np.linalg.eig(ZZT)  # Autovalori e autovettori di A^T A
+    # S_z = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
+    # Vh_z_real = ca.inv(S_z + 1e-6) @ np.real(U_1.T) @ Z
+    # Vh_z_imag = ca.inv(S_z + 1e-6) @ -np.imag(U_1.T) @ Z
+    # Vh_z = Vh_z_real + 1j * Vh_z_imag
+
+    U_z, S, Vh_z = np.linalg.svd(Z)
+    S_z = np.zeros((Z.shape[0], Z.shape[1]))
+    np.fill_diagonal(S_z, S)
 
     #compute A,B
     # A = U_z.T.conj() @ Z @ V_y.T.conj() @ S_y**(-1) @ U_1.T.conj()
     # B = U_z.T.conj() @ Z @ V_y.T.conj() @ S_y**(-1) @ U_2.T.conj()
 
-
-    S_y_inv = np.linalg.inv(S_y)
-    A_real = np.real(U_z.T) @ Z @ np.real(V_y) @ S_y_inv @ np.real(U_1.T)
-    A_imag = np.imag(U_z.T) @ Z @ np.imag(V_y) @ S_y_inv @ np.imag(U_1.T)
+    S_y_inv = np.linalg.pinv(S_y)
+    A_real = np.real(U_z.T) @ Z @ np.real(Vh_y.T) @ S_y_inv @ np.real(U_1.T)
+    A_imag = np.imag(U_z.T) @ Z @ np.imag(Vh_y.T) @ S_y_inv @ np.imag(U_1.T)
     A = A_real + 1j * A_imag 
 
-    B_real = np.real(U_z.T) @ Z @ np.real(V_y) @ S_y_inv @ np.real(U_2.T)
-    B_imag = np.imag(U_z.T) @ Z @ np.imag(V_y) @ S_y_inv @ np.imag(U_2.T)
+    B_real = np.real(U_z.T) @ Z @ np.real(Vh_y.T) @ S_y_inv @ np.real(U_2.T)
+    B_imag = np.imag(U_z.T) @ Z @ np.imag(Vh_y.T) @ S_y_inv @ np.imag(U_2.T)
     B = B_real + 1j * B_imag
 
     A = np.array(A, dtype=float)

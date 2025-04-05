@@ -33,7 +33,7 @@ dt = T / N
 #Initialization of the observables
 Y_x = np.zeros((12, m))
 Y_x[:, 0] = x_init
-Y_u = np.random.uniform(-10,10, (4,m))
+Y_u = np.random.uniform(-2,2, (4,m))
 Z = np.zeros((12, m))
 
 #solve the model m times with the inputs y_u
@@ -67,6 +67,12 @@ for k in range(m-1):
 
 Y = np.vstack((Y_x, Y_u))
 A, B = EDMD(Z,Y)
+# save A into csv file
+df_A = pd.DataFrame(A)
+df_A.to_csv("csv/MPC/A.csv", index=False)
+# save B into csv file
+df_B = pd.DataFrame(B)
+df_B.to_csv("csv/MPC/B.csv", index=False)
 
 #MPC
 x_init = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]  
@@ -74,7 +80,7 @@ x_current = np.array(x_init)
 x_history = []  
 u_history = []  
 
-Q = np.diag([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])*5*10e7
+Q = np.diag([1, 1, 1])*5*10e7
 R = np.diag([1, 1, 1, 1])
 
 df_states = pd.read_csv("csv/TO/states.csv")
@@ -102,16 +108,37 @@ for t in range(N):
 
     #MPC predictor, substitute with linearized discretized model
     for k in range(M):
-        x_k = X_mpc[:, k]
         u_k = U_mpc[:, k]
 
-        Ad = expm(A * dt)
-        Bd = np.linalg.solve(A, (Ad - np.eye(A.shape[0])) @ B)
+        x_k = X_mpc[:, k]
+        x_k[0] = X_mpc[0, k]
+        x_k[1] = X_mpc[1, k]
+        x_k[2] = X_mpc[2, k]
+        x_k[3] = X_mpc[0, k]**2
+        x_k[4] = X_mpc[1, k]**2
+        x_k[5] = X_mpc[2, k]**2
+        x_k[6] = X_mpc[0, k]**2*X_mpc[1, k]
+        x_k[7] = X_mpc[0, k]**2*X_mpc[2, k]
+        x_k[8] = X_mpc[1, k]**2*X_mpc[2, k]
+        x_k[9] = X_mpc[1, k]**2*X_mpc[0, k]
+        x_k[10] = X_mpc[2, k]**2*X_mpc[0, k]
+        x_k[11] = X_mpc[2, k]**2*X_mpc[1, k]
         
-        x_next = Ad @ x_k + Bd @ u_k
-        opti_mpc.subject_to(X_mpc[:, k+1] == x_next)
+        x_next = A @ x_k + B @ u_k
+        opti_mpc.subject_to(X_mpc[0, k+1] == x_next[0])
+        opti_mpc.subject_to(X_mpc[1, k+1] == x_next[1])
+        opti_mpc.subject_to(X_mpc[2, k+1] == x_next[2])
+        opti_mpc.subject_to(X_mpc[0, k+1]**2 == x_next[3])
+        opti_mpc.subject_to(X_mpc[1, k+1]**2 == x_next[4])
+        opti_mpc.subject_to(X_mpc[2, k+1]**2 == x_next[5])
+        opti_mpc.subject_to(X_mpc[0, k+1]**2*X_mpc[1, k+1] == x_next[6])
+        opti_mpc.subject_to(X_mpc[0, k+1]**2*X_mpc[2, k+1] == x_next[7])
+        opti_mpc.subject_to(X_mpc[1, k+1]**2*X_mpc[2, k+1] == x_next[8])
+        opti_mpc.subject_to(X_mpc[1, k+1]**2*X_mpc[0, k+1] == x_next[9])
+        opti_mpc.subject_to(X_mpc[2, k+1]**2*X_mpc[0, k+1] == x_next[10])
+        opti_mpc.subject_to(X_mpc[2, k+1]**2*X_mpc[1, k+1] == x_next[11])
 
-    opti_mpc.subject_to(opti_mpc.bounded(-10, U_mpc[:, :], 10))
+    opti_mpc.subject_to(opti_mpc.bounded(-2, U_mpc[:, :], 2))
     # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[1, :], 5))
     # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[2, :], 5))
     # opti_mpc.subject_to(opti_mpc.bounded(-5, U_mpc[3, :], 5))
@@ -121,9 +148,9 @@ for t in range(N):
     tracking_cost = 0
     for k in range(M + 1):
         if t + k < N:
-            tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, t + k]).T, Q, (X_mpc[:, k] - X_ref[:, t + k])])
+            tracking_cost += ca.mtimes([(X_mpc[0:3, k] - X_ref[0:3, t + k]).T, Q, (X_mpc[0:3, k] - X_ref[0:3, t + k])])
         else:
-            tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, N]).T, Q, (X_mpc[:, k] - X_ref[:, N])])
+            tracking_cost += ca.mtimes([(X_mpc[0:3, k] - X_ref[0:3, N]).T, Q, (X_mpc[0:3, k] - X_ref[0:3, N])])
         if k<(M):
             tracking_cost += ca.mtimes([(U_mpc[:, k]).T, R, (U_mpc[:, k])])
     opti_mpc.minimize(tracking_cost)
@@ -180,7 +207,7 @@ for t in range(N):
 
     total_time += sol_mpc.stats()['t_proc_total']
 
-x_history.append(np.array(x_current))
+x_history.append(np.array(X_mpc_opt[:, 1]))
 X_opt = np.array(x_history).T
 U_opt = np.array(u_history).T  
 
