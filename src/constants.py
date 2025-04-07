@@ -5,6 +5,6 @@ import numpy as np
 
 N = 200
 TIME = 5
-M = 20 #MPC horizon
+M = 10 #MPC horizon
 m = 350 #DMD horizon
 

@@ -6,41 +6,53 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import casadi as ca
 from constants import *
+from itertools import combinations_with_replacement
+
+def generate_observables(x, max_order=3, use_trig=True):
+    observables = [1.0]  # bias term
+
+    # Polinomi fino al grado max_order
+    for order in range(1, max_order + 1):
+        for comb in combinations_with_replacement(range(6), order):
+            term = np.prod([x[i] for i in comb])
+            observables.append(term)
+
+    if use_trig:
+        observables.append(np.sin(x[3]))
+        observables.append(np.cos(x[3]))
+        observables.append(np.sin(x[4]))
+        observables.append(np.cos(x[4]))
+        observables.append(np.sin(x[5]))
+        observables.append(np.cos(x[5]))
+
+    return np.array(observables)
 
 def EDMD(Z,Y):
-    YYT = Y @ Y.T  # Matrice simmetrica positiva
-    eigvals, U_y = np.linalg.eig(YYT)  # Autovalori e autovettori di A^T A
-    S_y = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
-    Vh_y = ca.inv(S_y + 1e-6) @ np.conj(U_y.T) @ Y
+    # YYT = Y @ Y.T  # Matrice simmetrica positiva
+    # eigvals, U_y = np.linalg.eig(YYT)  # Autovalori e autovettori di A^T A
+    # S_y = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
+    # Vh_y = ca.inv(S_y + 1e-6) @ np.conj(U_y.T) @ Y
     
-    # U_y, S, Vh_y = np.linalg.svd(Y)
-    # S_y = np.zeros((Y.shape[0], Y.shape[1]))
-    # np.fill_diagonal(S_y, S)
+    U_y, S, Vh_y = np.linalg.svd(Y)
+    S_y = np.zeros((Y.shape[0], Y.shape[1]))
+    np.fill_diagonal(S_y, S)
 
-    U_1 = U_y[:12, :]
-    U_2 = U_y[12:, :]
+    U_1 = U_y[:84, :]
+    U_2 = U_y[84:, :]
 
-    ZZT = Z @ Z.T  # Matrice simmetrica positiva
-    eigvals, U_z = np.linalg.eig(ZZT)  # Autovalori e autovettori di A^T A
-    S_z = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
-    Vh_z = ca.inv(S_z + 1e-6) @ np.conj(U_z.T) @ Z
+    # ZZT = Z @ Z.T  # Matrice simmetrica positiva
+    # eigvals, U_z = np.linalg.eig(ZZT)  # Autovalori e autovettori di A^T A
+    # S_z = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
+    # Vh_z = ca.inv(S_z + 1e-6) @ np.conj(U_z.T) @ Z
 
-    # U_z, S, Vh_z = np.linalg.svd(Z)
-    # S_z = np.zeros((Z.shape[0], Z.shape[1]))
-    # np.fill_diagonal(S_z, S)
+    U_z, S, Vh_z = np.linalg.svd(Z)
+    S_z = np.zeros((Z.shape[0], Z.shape[1]))
+    np.fill_diagonal(S_z, S)
 
-    S_y_inv = np.linalg.inv(S_y)
-    #compute A,B
-    A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T)
+    S_y_inv = np.linalg.pinv(S_y)
+    # #compute A,B
+    A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T) @ U_z
     B = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
-    
-    # A_real = np.real(U_z.T) @ Z @ np.real(Vh_y.T) @ S_y_inv @ np.real(U_1.T)
-    # A_imag = np.imag(U_z.T) @ Z @ np.imag(Vh_y.T) @ S_y_inv @ np.imag(U_1.T)
-    # A = A_real + 1j * A_imag 
-
-    # B_real = np.real(U_z.T) @ Z @ np.real(Vh_y.T) @ S_y_inv @ np.real(U_2.T)
-    # B_imag = np.imag(U_z.T) @ Z @ np.imag(Vh_y.T) @ S_y_inv @ np.imag(U_2.T)
-    # B = B_real + 1j * B_imag
 
     if np.all(np.abs(np.imag(A)) < 1e-10):
         A = np.real(A)
