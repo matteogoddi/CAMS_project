@@ -1,15 +1,13 @@
 """
-This script implements a trajectory optimization problem for a vehicle model.
-The vehicle dynamics are defined using a bicycle model with tire forces modeled using the Pacejka magic formula.
-The goal is to minimize the error between the vehicle's final state and the desired goal state.
+This script implements a trajectory optimization problem for a quadrotor model.
+The quadrotor dynamics are defined using a bicyclmatlab script found online.
+The goal is to minimize the error between the quadrotot's final state and the desired goal state.
 
 Inputs:
-- Vehicle parameters: Defined in 'constants.py'.
 - Goal state: Defined by 'x_goal'.
 
 Outputs:
 - Plots: Saved in the 'images' directory.
-- Animations: Saved in the 'videos' directory.
 - Trajectory data: Saved in 'csv' directory.
 """
 import sys
@@ -47,7 +45,7 @@ for k in range(N):
     opti.subject_to(X[:, k+1] == x_next)
 
 
-opti.subject_to(opti.bounded(-0.5, U[:, :], 0.5))
+opti.subject_to(opti.bounded(-10, U[:, :], 10))
 # opti.subject_to(opti.bounded(-5, U[1, :], 5))
 # opti.subject_to(opti.bounded(-5, U[2, :], 5))
 # opti.subject_to(opti.bounded(-5, U[3, :], 5))
