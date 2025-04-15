@@ -1,0 +1,4 @@
+casadi
+matplotlib
+pandas
+scipy
