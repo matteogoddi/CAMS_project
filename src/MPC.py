@@ -23,84 +23,73 @@ from constants import *
 from scipy.linalg import expm
 
 #EDMD
-#x_init = [np.random.uniform(-0.25, 0.25), np.random.uniform(-0.25, 0.25), 0, 0, 0, 0, 0]
-T = TIME
-dt = T / N
 
-#Initialization of the observables
-Y_x = np.array(np.zeros((N_states, m)))
-Y_x[:, 0] = generate_observables(x_init)
-# Y_x[0, 0] = x_init[0]
-# Y_x[1, 0] = x_init[1]
-# Y_x[2, 0] = x_init[2]
-# Y_x[3, 0] = x_init[0]**2
-# Y_x[4, 0] = x_init[1]**2
-# Y_x[5, 0] = x_init[2]**2
-# Y_x[6, 0] = x_init[0]**2*x_init[1]
-# Y_x[7, 0] = x_init[0]**2*x_init[2]
-# Y_x[8, 0] = x_init[1]**2*x_init[2]
-# Y_x[9, 0] = x_init[1]**2*x_init[0]
-# Y_x[10, 0] = x_init[2]**2*x_init[0]
-# Y_x[11, 0] = x_init[2]**2*x_init[1]
-Y_u = np.random.uniform(-10,10, (N_controls,m))
-Z = np.zeros((N_states, m))
+init, N_observables = generate_observables(x_init[0:N_measurements], order, False, True)
 
-#solve the model m times with the inputs y_u
-x_i = x_init
-for k in range(m-1):
-    x_k = x_i
-    u_k = Y_u[:, k]
+if not initialized:
+    #Initialization of the observables
+    Y_x = np.array(np.zeros((N_observables, m)))
+    Y_x[:, 0] = init
+    Y_u = np.random.uniform(u_min,u_max, (N_controls,m))
+    Z = np.zeros((N_observables, m))
 
-    k1 = f(x_k, u_k)
-    k2 = f(x_k + dt/2 * k1, u_k)
-    k3 = f(x_k + dt/2 * k2, u_k)
-    k4 = f(x_k + dt * k3, u_k)
+    #solve the model m times with the inputs y_u
+    x_next = x_init
+    for k in range(m-1):
+        x_k = x_next
+        u_k = Y_u[:, k]
 
-    x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-    x_i = x_next
+        k1 = f(x_k, u_k)
+        k2 = f(x_k + dt/2 * k1, u_k)
+        k3 = f(x_k + dt/2 * k2, u_k)
+        k4 = f(x_k + dt * k3, u_k)
 
-    #obtain the observables
-    if k != m-1:
-        Y_x[:, k+1] = generate_observables(x_next)
-        # Y_x[0, k+1] = x_i[0]
-        # Y_x[1, k+1] = x_i[1]
-        # Y_x[2, k+1] = x_i[2]
-        # Y_x[3, k+1] = x_i[0]**2
-        # Y_x[4, k+1] = x_i[1]**2
-        # Y_x[5, k+1] = x_i[2]**2
-        # Y_x[6, k+1] = x_i[0]**2*x_i[1]
-        # Y_x[7, k+1] = x_i[0]**2*x_i[2]
-        # Y_x[8, k+1] = x_i[1]**2*x_i[2]
-        # Y_x[9, k+1] = x_i[1]**2*x_i[0]
-        # Y_x[10, k+1] = x_i[2]**2*x_i[0]
-        # Y_x[11, k+1] = x_i[2]**2*x_i[1]
-    Z[:, k] = generate_observables(x_next)
-    # Z[0, k] = x_i[0]
-    # Z[1, k] = x_i[1]
-    # Z[2, k] = x_i[2]
-    # Z[3, k] = x_i[0]**2
-    # Z[4, k] = x_i[1]**2
-    # Z[5, k] = x_i[2]**2
-    # Z[6, k] = x_i[0]**2*x_i[1]
-    # Z[7, k] = x_i[0]**2*x_i[2]
-    # Z[8, k] = x_i[1]**2*x_i[2]
-    # Z[9, k] = x_i[1]**2*x_i[0]
-    # Z[10, k] = x_i[2]**2*x_i[0]
-    # Z[11, k] = x_i[2]**2*x_i[1]
+        x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
 
-print("Y_x: ", Y_x)
-print("Z: ", Z)
-Y = np.vstack((Y_x, Y_u))
-A, B = EDMD(Z,Y)
+        #change type from DM to numpy array
+        x_next = np.array(x_next)
 
-# save A into csv file
-df_A = pd.DataFrame(A)
-df_A.to_csv("csv/MPC/A.csv", index=False)
-# save B into csv file
-df_B = pd.DataFrame(B)
-df_B.to_csv("csv/MPC/B.csv", index=False)
+        #obtain the observables
+        if k != m-1:
+            Y_x[:, k+1] = generate_observables(x_next[0:N_measurements], order)
+        Z[:, k] = generate_observables(x_next[0:N_measurements], order)
+
+    Y = np.vstack((Y_x, Y_u))
+    A, B = EDMD(Z,Y, N_observables)
+
+    # save A into csv file
+    df_A = pd.DataFrame(A)
+    df_A.to_csv("csv/MPC/A.csv", index=False)
+    # save B into csv file
+    df_B = pd.DataFrame(B)
+    df_B.to_csv("csv/MPC/B.csv", index=False)
+    #save Y_x into csv file
+    df_Y_x = pd.DataFrame(Y_x)
+    df_Y_x.to_csv("csv/MPC/Y_x.csv", index=False)
+    #save Y_u into csv file
+    df_Y_u = pd.DataFrame(Y_u)
+    df_Y_u.to_csv("csv/MPC/Y_u.csv", index=False)
+    #save Z into csv file
+    df_Z = pd.DataFrame(Z)
+    df_Z.to_csv("csv/MPC/Z.csv", index=False)
+
+else:
+    # Load A and B from csv files
+    df_A = pd.read_csv("csv/MPC/A.csv")
+    df_B = pd.read_csv("csv/MPC/B.csv")
+    A = df_A.to_numpy()
+    B = df_B.to_numpy()
+
+    # Load Y_x and Y_u from csv files
+    df_Y_x = pd.read_csv("csv/MPC/Y_x.csv")
+    df_Y_u = pd.read_csv("csv/MPC/Y_u.csv")
+    df_Z = pd.read_csv("csv/MPC/Z.csv")
+    Y_x = df_Y_x.to_numpy()
+    Y_u = df_Y_u.to_numpy()
+    Z = df_Z.to_numpy()
 
 # compute the response of both models to check the accuracy of the linear model
+train_check = check_model(A, B, N_observables)
 x_next1 = A @ Y_x[:,0] + B @ Y_u[:, 0]
 
 k1 = f(x_init, Y_u[:, 0])
@@ -110,19 +99,21 @@ k4 = f(x_init + dt * k3, Y_u[:, 0])
 x_next2 = x_init + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
 
 # print first three states
-# print("x_next1: ", x_next1[0:3])
-# print("x_next2: ", x_next2[0:3])
-print("x_next1: ", x_next1)
-print("x_next2: ", x_next2)
+print("x_next1: ", x_next1[0:N_measurements])
+print("x_next2: ", x_next2[0:N_measurements])
 
 #MPC
 x_current = np.array(x_init)
 x_history = []  
 u_history = []  
+x_history.append(np.array(x_current).flatten())  
+observables_z = np.zeros((N_observables, 1))
 
 #aggiungi altre variabili in Q se aggiungi altri stati alla traiettoria
-Q = np.diag([1, 1, 1, 1, 1, 1, 1])*5*10e7
-R = np.diag([1, 1])
+#genera vettore di 1 di lunghezza N_observables
+
+Q = np.diag(np.ones(N_measurements))*5*10e5
+R = np.diag(np.ones(N_controls))
 
 df_states = pd.read_csv("csv/TO/states.csv")
 X_ref = df_states[states_names_df].to_numpy().T
@@ -141,7 +132,7 @@ for t in range(N):
     s_opts = {"max_iter": 1000, "tol": 1e-6, "print_level": 3}
     opti_mpc.solver('ipopt', p_opts, s_opts)
 
-    X_mpc = opti_mpc.variable(N_states, M + 1)
+    X_mpc = opti_mpc.variable(N_observables, M + 1)
     U_mpc = opti_mpc.variable(N_controls, M)
 
     #MPC predictor, substitute with linearized discretized model
@@ -152,38 +143,18 @@ for t in range(N):
         #x_k[:, 0] = generate_observables(X_mpc[:,k], 3, True)
         
         x_next = A @ x_k + B @ u_k
-        opti_mpc.subject_to(X_mpc[0, k+1] == x_next[0])
-        opti_mpc.subject_to(X_mpc[1, k+1] == x_next[1])
-        opti_mpc.subject_to(X_mpc[2, k+1] == x_next[2])
-        opti_mpc.subject_to(X_mpc[3, k+1] == x_next[3])
-        opti_mpc.subject_to(X_mpc[4, k+1] == x_next[4])
-        opti_mpc.subject_to(X_mpc[5, k+1] == x_next[5])
-        opti_mpc.subject_to(X_mpc[6, k+1] == x_next[6])
-        # opti_mpc.subject_to(X_mpc[7, k+1] == x_next[7])
-        # opti_mpc.subject_to(X_mpc[8, k+1] == x_next[8])
-        # opti_mpc.subject_to(X_mpc[9, k+1] == x_next[9])
-        # opti_mpc.subject_to(X_mpc[10, k+1] == x_next[10])
-        # opti_mpc.subject_to(X_mpc[11, k+1] == x_next[11])
-        # opti_mpc.subject_to(X_mpc[0, k+1]**2 == x_next[3])
-        # opti_mpc.subject_to(X_mpc[1, k+1]**2 == x_next[4])
-        # opti_mpc.subject_to(X_mpc[2, k+1]**2 == x_next[5])
-        # opti_mpc.subject_to(X_mpc[0, k+1]**2*X_mpc[1, k+1] == x_next[6])
-        # opti_mpc.subject_to(X_mpc[0, k+1]**2*X_mpc[2, k+1] == x_next[7])
-        # opti_mpc.subject_to(X_mpc[1, k+1]**2*X_mpc[2, k+1] == x_next[8])
-        # opti_mpc.subject_to(X_mpc[1, k+1]**2*X_mpc[0, k+1] == x_next[9])
-        # opti_mpc.subject_to(X_mpc[2, k+1]**2*X_mpc[0, k+1] == x_next[10])
-        # opti_mpc.subject_to(X_mpc[2, k+1]**2*X_mpc[1, k+1] == x_next[11])
+        opti_mpc.subject_to(X_mpc[:, k+1] == x_next)
 
-    opti_mpc.subject_to(opti_mpc.bounded(-10, U_mpc[:, :], 10))
+    opti_mpc.subject_to(opti_mpc.bounded(u_min, U_mpc[:, :], u_max))
     
-    opti_mpc.subject_to(X_mpc[:, 0] == x_current)
+    opti_mpc.subject_to(X_mpc[:, 0] == observables_z)
 
     tracking_cost = 0
     for k in range(M + 1):
         if t + k < N:
-            tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, t + k]).T, Q, (X_mpc[:, k] - X_ref[:, t + k])])
+            tracking_cost += ca.mtimes([(X_mpc[0:N_measurements, k] - X_ref[0:N_measurements, t + k]).T, Q, (X_mpc[0:N_measurements, k] - X_ref[0:N_measurements, t + k])])
         else:
-            tracking_cost += ca.mtimes([(X_mpc[:, k] - X_ref[:, N]).T, Q, (X_mpc[:, k] - X_ref[:, N])])
+            tracking_cost += ca.mtimes([(X_mpc[0:N_measurements, k] - X_ref[0:N_measurements, N]).T, Q, (X_mpc[0:N_measurements, k] - X_ref[0:N_measurements, N])])
         if k<(M):
             tracking_cost += ca.mtimes([(U_mpc[:, k]).T, R, (U_mpc[:, k])])
     opti_mpc.minimize(tracking_cost)
@@ -193,54 +164,27 @@ for t in range(N):
     U_mpc_opt = sol_mpc.value(U_mpc)
     
     #actual feedback
-    k1 = f(X_mpc_opt[:,0], U_mpc_opt[:, 0])
-    k2 = f(X_mpc_opt[:,0] + dt/2 * k1, U_mpc_opt[:, 0])
-    k3 = f(X_mpc_opt[:,0] + dt/2 * k2, U_mpc_opt[:, 0])
-    k4 = f(X_mpc_opt[:,0] + dt * k3, U_mpc_opt[:, 0])
+    k1 = f(x_current, U_mpc_opt[:, 0])
+    k2 = f(x_current + dt/2 * k1, U_mpc_opt[:, 0])
+    k3 = f(x_current + dt/2 * k2, U_mpc_opt[:, 0])
+    k4 = f(x_current + dt * k3, U_mpc_opt[:, 0])
     x_current = x_current + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
     u_current = U_mpc_opt[:, 0]
-
-    #compute again A,B 
-    # observables_y = np.zeros((12, 1))
-    # observables_y[0] = X_mpc_opt[0, 0]
-    # observables_y[1] = X_mpc_opt[1, 0]
-    # observables_y[2] = X_mpc_opt[2, 0]
-    # observables_y[3] = X_mpc_opt[0, 0]**2
-    # observables_y[4] = X_mpc_opt[1, 0]**2
-    # observables_y[5] = X_mpc_opt[2, 0]**2
-    # observables_y[6] = X_mpc_opt[0, 0]**2*X_mpc_opt[1, 0]
-    # observables_y[7] = X_mpc_opt[0, 0]**2*X_mpc_opt[2, 0]
-    # observables_y[8] = X_mpc_opt[1, 0]**2*X_mpc_opt[2, 0]
-    # observables_y[9] = X_mpc_opt[1, 0]**2*X_mpc_opt[0, 0]
-    # observables_y[10] = X_mpc_opt[2, 0]**2*X_mpc_opt[0, 0]
-    # observables_y[11] = X_mpc_opt[2, 0]**2*X_mpc_opt[1, 0]
     
-    # observables_z = np.zeros((12, 1))
-    # observables_z[0] = x_current[0]
-    # observables_z[1] = x_current[1]
-    # observables_z[2] = x_current[2]
-    # observables_z[3] = x_current[0]**2
-    # observables_z[4] = x_current[1]**2
-    # observables_z[5] = x_current[2]**2
-    # observables_z[6] = x_current[0]**2*x_current[1]
-    # observables_z[7] = x_current[0]**2*x_current[2]
-    # observables_z[8] = x_current[1]**2*x_current[2]
-    # observables_z[9] = x_current[1]**2*x_current[0]
-    # observables_z[10] = x_current[2]**2*x_current[0]
-    # observables_z[11] = x_current[2]**2*x_current[1]
+    observables_z = generate_observables(np.array(x_current[0:N_measurements]), order)
 
-    Y_x = np.hstack((X_mpc_opt[:,0].reshape(-1,1), Y_x[:, 1:]))
+    Y_x = np.hstack((X_mpc_opt[:, 0].reshape(-1, 1), Y_x[:, 1:]))
     Y_u = np.hstack((U_mpc_opt[:, 0].reshape(-1, 1), Y_u[:, 1:]))
-    Z = np.hstack((X_mpc_opt[:,1].reshape(-1,1), Z[:, 1:]))
+    Z = np.hstack((observables_z.reshape(-1,1), Z[:, 1:]))
+    
     Y = np.vstack((Y_x, Y_u))
-    A,B = EDMD(Z,Y)
+    A,B = EDMD(Z,Y, N_observables)
 
-    x_history.append(np.array(X_mpc_opt[:, 0]))  
+    x_history.append(np.array(x_current).flatten())  
     u_history.append(np.array(u_current))
 
     total_time += sol_mpc.stats()['t_proc_total']
 
-x_history.append(np.array(X_mpc_opt[:, 1]))
 X_opt = np.array(x_history).T
 U_opt = np.array(u_history).T  
 

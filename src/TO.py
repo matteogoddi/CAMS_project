@@ -20,10 +20,7 @@ import pandas as pd
 from utils import *
 from constants import *
 
-T = TIME
-dt = T / N
-
-Q = np.diag([1, 1, 1, 1, 1, 1, 1])
+Q = np.diag(np.ones(N_states))
 
 opti = ca.Opti()
 X = opti.variable(N_states, N+1)
@@ -43,7 +40,7 @@ for k in range(N):
     opti.subject_to(X[:, k+1] == x_next)
 
 
-opti.subject_to(opti.bounded(-10, U[:, :], 10))
+opti.subject_to(opti.bounded(u_min, U[:, :], u_max))
 
 cost = ca.mtimes([(X[:,N]-x_goal).T,Q,(X[:,N]-x_goal)])
 opti.minimize(cost)
