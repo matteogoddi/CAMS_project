@@ -20,64 +20,81 @@ import pandas as pd
 from utils import *
 from constants import *
 
-Q = np.diag(np.ones(N_states))
-
-opti = ca.Opti()
-X = opti.variable(N_states, N+1)
-U = opti.variable(N_controls, N)
-
-opti.subject_to(X[:, 0] == x_init)
-
-for k in range(N):
-    x_k = X[:, k]
-    u_k = U[:, k]
+def TO(x_goal):
+    """
+    Trajectory Optimization function.
+    This function sets up and solves the trajectory optimization problem for a quadrotor model.
     
-    k1 = f(x_k, u_k)
-    k2 = f(x_k + dt/2 * k1, u_k)
-    k3 = f(x_k + dt/2 * k2, u_k)
-    k4 = f(x_k + dt * k3, u_k) 
-    x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-    opti.subject_to(X[:, k+1] == x_next)
+    Parameters:
+    - x_goal: Desired goal state for the quadrotor.
+    
+    Returns:
+    - None
+    """
+    Q = np.diag(np.ones(N_states))
+
+    opti = ca.Opti()
+    X = opti.variable(N_states, N+1)
+    U = opti.variable(N_controls, N)
+
+    opti.subject_to(X[:, 0] == x_init)
+
+    for k in range(N):
+        x_k = X[:, k]
+        u_k = U[:, k]
+        
+        k1 = f(x_k, u_k)
+        k2 = f(x_k + dt/2 * k1, u_k)
+        k3 = f(x_k + dt/2 * k2, u_k)
+        k4 = f(x_k + dt * k3, u_k) 
+        x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
+        opti.subject_to(X[:, k+1] == x_next)
 
 
-opti.subject_to(opti.bounded(u_min, U[:, :], u_max))
+    opti.subject_to(opti.bounded(4.5, U[0, :], 7))
+    opti.subject_to(opti.bounded(-0.1, U[1:, :], 0.1))
 
-cost = ca.mtimes([(X[:,N]-x_goal).T,Q,(X[:,N]-x_goal)])
-opti.minimize(cost)
+    # opti.subject_to(opti.bounded(-0.2, X[6:9, :], 0.2))
+    # opti.subject_to(opti.bounded(-0.5, X[9:12, :], 0.5))
 
-p_opts = {"expand": True}
-s_opts = {"max_iter": 1000, "tol": 1e-6, "print_level": 3}
-opti.solver('ipopt', p_opts, s_opts)
+    cost = ca.mtimes([(X[:,N]-x_goal).T,Q,(X[:,N]-x_goal)])
+    opti.minimize(cost)
 
-opti.set_initial(X, np.tile(x_init, (N+1, 1)).T)
-opti.set_initial(U, np.zeros((N_controls, N)))
+    p_opts = {"expand": True}
+    s_opts = {"max_iter": 1000, "tol": 1e-6, "print_level": 3}
+    opti.solver('ipopt', p_opts, s_opts)
 
-sol = opti.solve()
-if sol.stats()['success']:
-    print("Optimization successful!")
-else:
-    print("Optimization failed.")
+    opti.set_initial(X, np.tile(x_init, (N+1, 1)).T)
+    opti.set_initial(U, np.zeros((N_controls, N)))
 
-X_opt = sol.value(X)
-U_opt = sol.value(U)
+    sol = opti.solve()
+    if sol.stats()['success']:
+        print("Optimization successful!")
+        #print("Final state: ", sol.value(X[:, -1]))
+    else:
+        print("Optimization failed.")
 
-fig1, fig2 = create_plots_sim1(X_opt, U_opt, x_goal, T, N)
+    X_opt = sol.value(X)
+    U_opt = sol.value(U)
 
-fig1.savefig("images/TO/states_plot.png", bbox_inches='tight')
-fig2.savefig("images/TO/controls_plot.png", bbox_inches='tight')
+    fig1, fig2 = create_plots_sim1(X_opt, U_opt, x_goal, T, N)
 
-# ani = create_vehicle_animation(X_opt[0,:], X_opt[1,:], X_opt[2,:], X_opt[6,:], l_f=0.18, l_r=0.18, 
-#                                track_width=0.3, interval=100, 
-#                                save_filename='videos/TO/vehicle_animation_final_cost.gif', fps=10, name = "Trajectory Vehicle Animation with $J = (X_N-X_g)^TQ(X_N-X_g)$")
+    fig1.savefig("images/TO/states_plot.png", bbox_inches='tight')
+    fig2.savefig("images/TO/controls_plot.png", bbox_inches='tight')
 
-time_states = np.linspace(0, T, N+1)
-time_controls = time_states[:-1]
+    # ani = create_vehicle_animation(X_opt[0,:], X_opt[1,:], X_opt[2,:], X_opt[6,:], l_f=0.18, l_r=0.18, 
+    #                                track_width=0.3, interval=100, 
+    #                                save_filename='videos/TO/vehicle_animation_final_cost.gif', fps=10, name = "Trajectory Vehicle Animation with $J = (X_N-X_g)^TQ(X_N-X_g)$")
 
-df_states = pd.DataFrame(X_opt.T, columns=states_names_df)
-df_states.insert(0, 'time (s)', time_states)
-df_states.to_csv("csv/TO/states.csv", index=False)
+    time_states = np.linspace(0, T, N+1)
+    time_controls = time_states[:-1]
 
-df_controls = pd.DataFrame(U_opt.T, columns=control_names_df)
-df_controls.insert(0, 'time (s)', time_controls)
-df_controls.to_csv("csv/TO/controls.csv", index=False)
+    df_states = pd.DataFrame(X_opt.T, columns=states_names_df)
+    df_states.insert(0, 'time (s)', time_states)
+    df_states.to_csv("csv/TO/states.csv", index=False)
+
+    df_controls = pd.DataFrame(U_opt.T, columns=control_names_df)
+    df_controls.insert(0, 'time (s)', time_controls)
+    df_controls.to_csv("csv/TO/controls.csv", index=False)
+    
 

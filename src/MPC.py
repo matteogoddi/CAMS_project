@@ -21,16 +21,34 @@ import pandas as pd
 from utils import *
 from constants import *
 from scipy.linalg import expm
+from TO import *
 
 #EDMD
 
-init, N_observables = generate_observables(x_init[0:N_measurements], order, False, True)
+init, N_observables = generate_observables(x_init[0:N_measurements], order, True, True)
 
 if not initialized:
+
+    #Generation of various trajectories
+    N_traj = m / N
+    x_goal = [2, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    # Y_u = np.zeros((N_controls, 1))
+    # for i in range(int(N_traj)):
+    #     #x_goal = [np.random.uniform(3, 5), np.random.uniform(1, 3), np.random.uniform(3, 5), 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    #     TO(x_goal)
+    #     df_controls = pd.read_csv("csv/TO/controls.csv")
+    #     U_ref = df_controls[control_names_df].to_numpy().T
+    #     Y_u = np.hstack((Y_u, U_ref))
+
+    # Y_u = Y_u[:, 1:]
+    # print("Y_u shape: ", Y_u.shape)
+    x_goal = [2, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    # TO(x_goal)
+
     #Initialization of the observables
     Y_x = np.array(np.zeros((N_observables, m)))
     Y_x[:, 0] = init
-    Y_u = np.random.uniform(u_min,u_max, (N_controls,m))
+    Y_u = np.vstack((np.random.uniform(4.5, 7, (1,m)), np.random.uniform(-0.1, 0.1, (N_controls-1,m))))
     Z = np.zeros((N_observables, m))
 
     #solve the model m times with the inputs y_u
@@ -54,8 +72,12 @@ if not initialized:
             Y_x[:, k+1] = generate_observables(x_next[0:N_measurements], order)
         Z[:, k] = generate_observables(x_next[0:N_measurements], order)
 
+    #take the element each mu steps
+    Y_x = Y_x[:, ::undersampling]
+    Y_u = Y_u[:, ::undersampling]
+    Z = Z[:, ::undersampling]
     Y = np.vstack((Y_x, Y_u))
-    A, B = EDMD(Z,Y, N_observables)
+    A, B = EDMD(Z, Y, N_observables)
 
     # save A into csv file
     df_A = pd.DataFrame(A)
@@ -124,30 +146,31 @@ U_ref = df_controls[control_names_df].to_numpy().T
 total_time = 0
 
 #cambiare 0 con N per far andare l'MPC
-for t in range(N):
+for t in range(0):
     # print("t: ", t)
-    opti_mpc = ca.Opti()
+    opti = ca.Opti()
 
     p_opts = {"expand": True}
     s_opts = {"max_iter": 1000, "tol": 1e-6, "print_level": 3}
-    opti_mpc.solver('ipopt', p_opts, s_opts)
+    opti.solver('ipopt', p_opts, s_opts)
 
-    X_mpc = opti_mpc.variable(N_observables, M + 1)
-    U_mpc = opti_mpc.variable(N_controls, M)
+    X_mpc = opti.variable(N_observables, M + 1)
+    U_mpc = opti.variable(N_controls, M)
 
     #MPC predictor, substitute with linearized discretized model
     for k in range(M):
         u_k = U_mpc[:, k]
-
         x_k = X_mpc[:, k]
-        #x_k[:, 0] = generate_observables(X_mpc[:,k], 3, True)
         
         x_next = A @ x_k + B @ u_k
-        opti_mpc.subject_to(X_mpc[:, k+1] == x_next)
+        opti.subject_to(X_mpc[:, k+1] == x_next)
 
-    opti_mpc.subject_to(opti_mpc.bounded(u_min, U_mpc[:, :], u_max))
+    # opti.subject_to(opti.bounded(u_min, U_mpc[:, :], u_max))
+
+    # opti.subject_to(opti.bounded(4.5, U_mpc[0, :], 7))
+    # opti.subject_to(opti.bounded(-0.01, U_mpc[1:, :], 0.01))
     
-    opti_mpc.subject_to(X_mpc[:, 0] == observables_z)
+    opti.subject_to(X_mpc[:, 0] == observables_z)
 
     tracking_cost = 0
     for k in range(M + 1):
@@ -157,9 +180,9 @@ for t in range(N):
             tracking_cost += ca.mtimes([(X_mpc[0:N_measurements, k] - X_ref[0:N_measurements, N]).T, Q, (X_mpc[0:N_measurements, k] - X_ref[0:N_measurements, N])])
         if k<(M):
             tracking_cost += ca.mtimes([(U_mpc[:, k]).T, R, (U_mpc[:, k])])
-    opti_mpc.minimize(tracking_cost)
+    opti.minimize(tracking_cost)
 
-    sol_mpc = opti_mpc.solve()
+    sol_mpc = opti.solve()
     X_mpc_opt = sol_mpc.value(X_mpc)
     U_mpc_opt = sol_mpc.value(U_mpc)
     
@@ -178,7 +201,7 @@ for t in range(N):
     Z = np.hstack((observables_z.reshape(-1,1), Z[:, 1:]))
     
     Y = np.vstack((Y_x, Y_u))
-    A,B = EDMD(Z,Y, N_observables)
+    A,B = EDMD(Z, Y, N_observables)
 
     x_history.append(np.array(x_current).flatten())  
     u_history.append(np.array(u_current))

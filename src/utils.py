@@ -41,7 +41,7 @@ def check_model(A, B, N_observables):
 
     return True
 
-def generate_observables(x, max_order=1, use_trig=False, return_len=False):
+def generate_observables(x, max_order=1, use_trig=True, return_len=False):
     """
     Generate polynomial observables up to a specified order.
     Optionally include trigonometric functions.
@@ -57,9 +57,26 @@ def generate_observables(x, max_order=1, use_trig=False, return_len=False):
             observables.append(term)
 
     if use_trig:
-        for i in range(len(x)):
-            observables.append(np.sin(x[i]))
-            observables.append(np.cos(x[i]))
+        # for i in range(len(x)-3):
+        #     observables.append(ca.sin(x[i+3]))
+        #     observables.append(ca.cos(x[i+3]))
+        observables.append(ca.sin(x[4]))
+        observables.append(ca.cos(x[4]))
+        observables.append(ca.sin(x[5]))
+        observables.append(ca.cos(x[5]))
+        observables.append(ca.sin(x[6]))
+        observables.append(ca.cos(x[6]))
+
+    observables.append(np.prod([x[6],x[6]]))
+    observables.append(np.prod([x[7],x[7]]))
+    observables.append(np.prod([x[8],x[8]]))
+    observables.append(np.prod([x[9],x[9]]))
+    observables.append(np.prod([x[10],x[10]]))
+    observables.append(np.prod([x[11],x[11]]))
+
+    observables.append(np.prod([x[9],x[10]]))
+    observables.append(np.prod([x[9],x[11]]))
+    observables.append(np.prod([x[10],x[11]]))
 
     if return_len:
         return np.array(observables), len(observables)
@@ -67,12 +84,17 @@ def generate_observables(x, max_order=1, use_trig=False, return_len=False):
         return np.array(observables)
 
 def EDMD(Z,Y, N_observables):
+    """
+    Perform SVD on the observables Z and Y.
+    Computes the EDMD matrices A and B from the observables Z and Y.
+    """
+
     # YYT = Y @ Y.T  # Matrice simmetrica positiva
     # eigvals, U_y = np.linalg.eig(YYT)  # Autovalori e autovettori di A^T A
     # S_y = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
     # Vh_y = ca.inv(S_y + 1e-6) @ np.conj(U_y.T) @ Y
     
-    r = 6
+    r = 0
     U_y, S, Vh_y = np.linalg.svd(Y)
     U_1 = U_y[:N_observables, :]
     U_2 = U_y[N_observables:, :]
@@ -94,11 +116,11 @@ def EDMD(Z,Y, N_observables):
     np.fill_diagonal(S_z, S)
 
     S_y_inv = np.linalg.inv(S_y)
-    # #compute A,B
-    # A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T) @ U_z
-    # B = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
-    A = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T)
-    B = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
+    #compute A,B
+    A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T) @ U_z
+    B = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
+    # A = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T)
+    # B = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
 
     if np.all(np.abs(np.imag(A)) < 1e-10):
         A = np.real(A)
@@ -108,7 +130,7 @@ def EDMD(Z,Y, N_observables):
     if np.all(np.abs(np.imag(B)) < 1e-10):
         B = np.real(B)
     else:
-        raise ValueError("A ha parte immaginaria significativa!")
+        raise ValueError("B ha parte immaginaria significativa!")
 
 
     A = np.array(A, dtype=float)
@@ -126,6 +148,16 @@ def f(in1, in2):
 
     Returns:
         The dynamics of the state vector.
+
+        If model == 1:
+            - 12 states (x, y, z, phi, theta, psi, vx, vy, vz, phi_dot, theta_dot, psi_dot)
+            - 4 controls (u1, u2, u3, u4)
+        if model == 2:
+            - 7 states (x, y, phi, vx, vy, r, delta)
+            - 2 controls (Fx, delta_delta)
+        if model == 3:
+            - 6 states (x1, x2, x3, x4, x5, x6)
+            - 2 controls (u1, u2)
     """
     if model == 1:
         in1 = ca.vertcat(in1[0],
@@ -258,6 +290,61 @@ def f(in1, in2):
             (x5-x3)*x2 - x4 + 8,
             (x6-x4)*x3 - x5 + 8,
             (x1-x5)*x4 - x6 + 8
+        )
+        
+    elif model == 4:
+        x_mod = ca.vertcat(in1[0],
+                        in1[1],
+                        in1[2],
+                        in1[3],   
+                        in1[4],
+                        in1[5],
+                        in1[6],
+                        in1[7],
+                        in1[8],
+                        in1[9],
+                        in1[10],
+                        in1[11])
+        x = x_mod[0]
+        y = x_mod[1]
+        z = x_mod[2]
+        phi = x_mod[3]
+        theta = x_mod[4]
+        psi = x_mod[5]
+        vx = x_mod[6]
+        vy = x_mod[7]
+        vz = x_mod[8]
+        p = x_mod[9]
+        q = x_mod[10]
+        r = x_mod[11]
+
+        T = in2[0]
+        tau_phi = in2[1]
+        tau_theta = in2[2]
+        tau_psi = in2[3]
+
+        g = 9.81
+        m = 0.5
+        I_x = 0.002
+        I_y = 0.002
+        I_z = 0.004
+        F_ax = 0
+        F_ay = 0
+        F_az = 0
+
+        dyn = ca.vertcat(
+            vx,
+            vy,
+            vz,
+            p + q*ca.sin(phi)*ca.tan(theta) + r*ca.cos(phi)*ca.tan(theta),
+            q*ca.cos(phi) - r*ca.sin(phi),
+            q*ca.sin(phi)/ca.cos(theta) + r*ca.cos(phi)/ca.cos(theta),
+            F_ax - (ca.cos(psi)*ca.sin(theta)*ca.cos(phi) + ca.sin(psi)*ca.sin(phi))*T/m,
+            F_ay - (ca.sin(psi)*ca.sin(theta)*ca.cos(phi) - ca.cos(psi)*ca.sin(phi))*T/m,
+            F_az + g - (ca.cos(theta)*ca.cos(phi))*T/m,
+            (I_y - I_z)/I_x*q*r + tau_phi/I_x,
+            (I_z - I_x)/I_y*p*r + tau_theta/I_y,
+            (I_x - I_y)/I_z*p*q + tau_psi/I_z 
         )
 
     return dyn
