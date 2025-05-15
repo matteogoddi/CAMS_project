@@ -7,6 +7,8 @@ import matplotlib.animation as animation
 import casadi as ca
 from constants import *
 from itertools import combinations_with_replacement
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
 
 def check_model(A, B, N_observables):
     """
@@ -56,27 +58,29 @@ def generate_observables(x, max_order=1, use_trig=True, return_len=False):
             term = np.prod([x[i] for i in comb])
             observables.append(term)
 
-    if use_trig:
-        # for i in range(len(x)-3):
-        #     observables.append(ca.sin(x[i+3]))
-        #     observables.append(ca.cos(x[i+3]))
-        observables.append(ca.sin(x[4]))
-        observables.append(ca.cos(x[4]))
-        observables.append(ca.sin(x[5]))
-        observables.append(ca.cos(x[5]))
-        observables.append(ca.sin(x[6]))
-        observables.append(ca.cos(x[6]))
+    if model == 4:
 
-    observables.append(np.prod([x[6],x[6]]))
-    observables.append(np.prod([x[7],x[7]]))
-    observables.append(np.prod([x[8],x[8]]))
-    observables.append(np.prod([x[9],x[9]]))
-    observables.append(np.prod([x[10],x[10]]))
-    observables.append(np.prod([x[11],x[11]]))
+        if use_trig:
+            # for i in range(len(x)-3):
+            #     observables.append(ca.sin(x[i+3]))
+            #     observables.append(ca.cos(x[i+3]))
+            observables.append(ca.sin(x[4]))
+            observables.append(ca.cos(x[4]))
+            observables.append(ca.sin(x[5]))
+            observables.append(ca.cos(x[5]))
+            observables.append(ca.sin(x[6]))
+            observables.append(ca.cos(x[6]))
 
-    observables.append(np.prod([x[9],x[10]]))
-    observables.append(np.prod([x[9],x[11]]))
-    observables.append(np.prod([x[10],x[11]]))
+        observables.append(np.prod([x[6],x[6]]))
+        observables.append(np.prod([x[7],x[7]]))
+        observables.append(np.prod([x[8],x[8]]))
+        observables.append(np.prod([x[9],x[9]]))
+        observables.append(np.prod([x[10],x[10]]))
+        observables.append(np.prod([x[11],x[11]]))
+
+        observables.append(np.prod([x[9],x[10]]))
+        observables.append(np.prod([x[9],x[11]]))
+        observables.append(np.prod([x[10],x[11]]))
 
     if return_len:
         return np.array(observables), len(observables)
@@ -117,10 +121,18 @@ def EDMD(Z,Y, N_observables):
 
     S_y_inv = np.linalg.inv(S_y)
     #compute A,B
-    A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T) @ U_z
-    B = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
-    # A = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T)
-    # B = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
+    # A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T) @ U_z
+    # B = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
+    A = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T)
+    B = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
+
+    G = Z @ np.linalg.pinv(Y)
+    
+    # G = LinearRegression(fit_intercept=False)
+    # G.fit(Y, Z)
+
+    A = G[:, :N_observables]
+    B = G[:, N_observables:]
 
     if np.all(np.abs(np.imag(A)) < 1e-10):
         A = np.real(A)
@@ -150,8 +162,8 @@ def f(in1, in2):
         The dynamics of the state vector.
 
         If model == 1:
-            - 12 states (x, y, z, phi, theta, psi, vx, vy, vz, phi_dot, theta_dot, psi_dot)
-            - 4 controls (u1, u2, u3, u4)
+            - 4 states (q1, q2, q3, q4)
+            - 2 controls (u1, u2)
         if model == 2:
             - 7 states (x, y, phi, vx, vy, r, delta)
             - 2 controls (Fx, delta_delta)
@@ -163,72 +175,39 @@ def f(in1, in2):
         in1 = ca.vertcat(in1[0],
                            in1[1],
                            in1[2],
-                           in1[3],   
-                           in1[4],
-                           in1[5],
-                           in1[6],
-                           in1[7],
-                           in1[8],
-                           in1[9],
-                           in1[10],
-                           in1[11])
-        phi_t, theta_t, psi_t = in1[3], in1[4], in1[5]
-        phi_dot_t, theta_dot_t, psi_dot_t = in1[9], in1[10], in1[11]
-        x_dot_t, y_dot_t, z_dot_t = in1[6], in1[7], in1[8]
-        u1, u2, u3, u4 = in2[0], in2[1], in2[2], in2[3]
+                           in1[3])
+
+        m1 = 1
+        m2 = 1
+        dc1 = 0.5
+        dc2 = 0.5
+        Ic2 = 0.01
+
+        q1 = in1[0]
+        q2 = in1[1]
+        q3 = in1[2]
+        q4 = in1[3]
+
+        t1 = in2[0]
+        t2 = in2[1]
+
+        M = (ca.vertcat(
+            ca.horzcat(m1 + m2, -m2 * dc2 * ca.sin(q2)),
+            ca.horzcat(-m2 * dc2 * ca.sin(q2), Ic2 + m2 * dc2**2)
+        ))
+
+        M_inv = ca.vertcat(
+            ca.horzcat((Ic2 + m2 * dc2**2) / ((m1 + m2)*(Ic2 + m2 * dc2**2)-m2**2 * dc2**2 * ca.sin(q2)**2), m2 * dc2 * ca.sin(q2) / ((m1 + m2)*(Ic2 + m2 * dc2**2)-m2**2 * dc2**2 * ca.sin(q2)**2)),
+            ca.horzcat(m2 * dc2 * ca.sin(q2) / ((m1 + m2)*(Ic2 + m2 * dc2**2)-m2**2 * dc2**2 * ca.sin(q2)**2), (m1+m2) / ((m1 + m2)*(Ic2 + m2 * dc2**2)-m2**2 * dc2**2 * ca.sin(q2)**2))
+        )
+
+        dyn = ca.vertcat(
+            q3,            
+            q4,
+            M_inv[0, 0] * (t1 + m2*dc2*ca.cos(q2)*q4**2) + M_inv[0, 1] * t2,
+            M_inv[1, 0] * (t1 + m2*dc2*ca.cos(q2)*q4**2) + M_inv[1, 1] * t2
+        )
         
-        t2, t3, t4 = ca.cos(phi_t), ca.cos(psi_t), ca.cos(theta_t)
-        t5, t6, t7 = ca.sin(phi_t), ca.sin(psi_t), ca.sin(theta_t)
-        t8, t10 = 2 * phi_t, 2 * theta_t
-        t9 = psi_dot_t**2
-        t15 = u1 + u2 + u3 + u4
-        t11, t12 = t2**2, t4**2
-        t13, t14 = ca.sin(t8), ca.sin(t10)
-        t16 = 1.0 / t12
-
-        mt1 = ca.vertcat(
-            x_dot_t,
-            y_dot_t, 
-            z_dot_t, 
-            phi_dot_t, 
-            theta_dot_t, 
-            psi_dot_t,
-            (t15 * (t5 * t6+t2 * t3 * t7)) / 2.0, 
-            t15 * (t3 * t5-t2 * t6 * t7) * (-1.0 / 2.0),
-            (t2 * t4 * t15) / 2.0 - 9.81e+2 / 1.0e+2
-        )
-        mt2 = ca.vertcat(
-            (t16 * (u2 * (-1.15e+2) + u4 * 1.15e+2 - t7 * u1 * 9.2e+1 + t7 * u2 * 9.2e+1 - 
-            t7 * u3 * 9.2e+1 + t7 * u4 * 9.2e+1 + t11 * u2 * 5.5e+1 - t11 * u4 * 5.5e+1 +
-            phi_dot_t * t14 * theta_dot_t * 2.3e+1 + psi_dot_t * t4 * theta_dot_t * 1.058e+3 +
-            t7 * t11 * u1 * 4.4e+1 - t7 * t11 * u2 * 4.4e+1 + t7 * t11 * u3 * 4.4e+1 - 
-            t7 * t11 * u4 * 4.4e+1 - t11 * t12 * u2 * 5.5e+1 + t11 * t12 * u4 * 5.5e+1 - 
-            psi_dot_t * t4 * t11 * theta_dot_t * 5.06e+2 - t2 * t5 * t9 * t12 * 5.06e+2 -
-            psi_dot_t * t4**3 * t11 * theta_dot_t * 5.06e+2 + t2 * t5 * t12 * theta_dot_t**2 * 5.06e+2 +
-            phi_dot_t * t4 * t7 * t11 * theta_dot_t * 5.06e+2 - t2 * t4 * t5 * t7 * u1 * 5.5e+1 +
-            t2 * t4 * t5 * t7 * u3 * 5.5e+1 + 
-            phi_dot_t * psi_dot_t * t2 * t5 * t7 * t12 * 5.06e+2)) / 5.52e+2
-        )
-        mt3 = ca.vertcat(
-            ((t4 * u1 * 6.0e+1 - t4 * u3 * 6.0e+1 + t13 * u1 * 2.2e+1 - t13 * u2 * 2.2e+1 +
-            t13 * u3 * 2.2e+1 - t13 * u4 * 2.2e+1 + phi_dot_t * psi_dot_t * t12 * 5.52e+2 +
-            t4 * t11 * u1 * 5.5e+1 - t4 * t11 * u3 * 5.5e+1 - phi_dot_t * psi_dot_t * t11 * t12 * 5.06e+2 +
-            t7 * t9 * t11 * t12 * 5.06e+2 + t2 * t5 * t7 * u2 * 5.5e+1 - t2 * t5 * t7 * u4 * 5.5e+1 + 
-            phi_dot_t * t2 * t4 * t5 * theta_dot_t * 5.06e+2 - 
-            psi_dot_t * t2 * t4 * t5 * t7 * theta_dot_t * 5.06e+2) * (-1.0 / 5.52e+2)) / t4
-        )
-        mt4 = ca.vertcat(
-            (t16 * (u1 * (-9.2e+1) + u2 * 9.2e+1 - u3 * 9.2e+1 + u4 * 9.2e+1 - t7 * u2 * 1.15e+2 + 
-            t7 * u4 * 1.15e+2 + t11 * u1 * 4.4e+1 - t11 * u2 * 4.4e+1 + t11 * u3 * 4.4e+1 -
-            t11 * u4 * 4.4e+1 + phi_dot_t * t4 * theta_dot_t * 4.6e+1 + 
-            psi_dot_t * t14 * theta_dot_t * 5.29e+2 + t7 * t11 * u2 * 5.5e+1 - 
-            t7 * t11 * u4 * 5.5e+1 + phi_dot_t * t4 * t11 * theta_dot_t * 5.06e+2 - 
-            t2 * t4 * t5 * u1 * 5.5e+1 + t2 * t4 * t5 * u3 * 5.5e+1 + 
-            phi_dot_t * psi_dot_t * t2 * t5 * t12 * 5.06e+2 - 
-            psi_dot_t * t4 * t7 * t11 * theta_dot_t * 5.06e+2-t2 * t5 * t7 * t9 * t12 * 5.06e+2)) / 5.52e+2
-        )
-
-        dyn = ca.vertcat(mt1, mt2, mt3, mt4)
     
     elif model == 2:
 
@@ -347,6 +326,23 @@ def f(in1, in2):
             (I_x - I_y)/I_z*p*q + tau_psi/I_z 
         )
 
+    elif model == 5:
+        ## implement inverted pendulum dynamics 
+        x_mod = ca.vertcat(in1[0],
+                        in1[1])
+
+        x1 = x_mod[0]
+        x2 = x_mod[1]
+        u1 = in2[0]
+
+        g = 9.81
+        m = 0.5
+        l = 0.5
+        dyn = ca.vertcat(
+            x2,
+            -g/l*ca.sin(x1) + u1/(m*l**2)
+        )
+
     return dyn
 
 
@@ -411,10 +407,6 @@ def create_plots_sim2(X_opt, U_opt, X_ref, U_ref, T, N):
     """
     time   = np.linspace(0, T, N+1)
     time_u = time[:-1]
-    
-    state_names   = ['X (m)', 'Y (m)', 'Z (m)', r'$\phi$ (rad)', r'$\theta$', r'$\psi$',
-       r'$v_x$ (m/s)', r'$v_y$ (m/s)', r'$v_z$ (rad/s)', r'$\phi_{dot}$ (rad)', r'$\theta_{dot}$', r'$\psi_{dot}$']
-    control_names = [r'$U_1$', r'$U_2$', r'$U_3$', r'$U_4$']
     
     fig1 = plt.figure(figsize=(12, 8))
     for i in range(N_states):

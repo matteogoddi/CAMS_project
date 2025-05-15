@@ -29,26 +29,22 @@ init, N_observables = generate_observables(x_init[0:N_measurements], order, True
 
 if not initialized:
 
-    #Generation of various trajectories
-    N_traj = m / N
-    x_goal = [2, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    # Y_u = np.zeros((N_controls, 1))
-    # for i in range(int(N_traj)):
-    #     #x_goal = [np.random.uniform(3, 5), np.random.uniform(1, 3), np.random.uniform(3, 5), 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    #     TO(x_goal)
-    #     df_controls = pd.read_csv("csv/TO/controls.csv")
-    #     U_ref = df_controls[control_names_df].to_numpy().T
-    #     Y_u = np.hstack((Y_u, U_ref))
+    TO(x_goal)
 
-    # Y_u = Y_u[:, 1:]
-    # print("Y_u shape: ", Y_u.shape)
-    x_goal = [2, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    # TO(x_goal)
+    # divide the interval [0, 0.5] into N intervals
+    #divide the interval [0, 10*np.pi] into N intervals
+    # a = np.linspace(0, 0.3, N+1)
+    # b = np.linspace(0, 2*np.pi, N+1)
+    # #stack them
+    # X_ref = np.vstack((a, b))
 
     #Initialization of the observables
     Y_x = np.array(np.zeros((N_observables, m)))
-    Y_x[:, 0] = init
-    Y_u = np.vstack((np.random.uniform(4.5, 7, (1,m)), np.random.uniform(-0.1, 0.1, (N_controls-1,m))))
+    Y_x[:, 0] = generate_observables(x_init[0:N_measurements], order)
+
+    Y_u = np.zeros((N_controls, m))
+    for i in range(N_controls):
+        Y_u[i,:] = np.random.uniform(u_min[i], u_max[i], (1,m))
     Z = np.zeros((N_observables, m))
 
     #solve the model m times with the inputs y_u
@@ -111,7 +107,7 @@ else:
     Z = df_Z.to_numpy()
 
 # compute the response of both models to check the accuracy of the linear model
-train_check = check_model(A, B, N_observables)
+# train_check = check_model(A, B, N_observables)
 x_next1 = A @ Y_x[:,0] + B @ Y_u[:, 0]
 
 k1 = f(x_init, Y_u[:, 0])
@@ -129,10 +125,7 @@ x_current = np.array(x_init)
 x_history = []  
 u_history = []  
 x_history.append(np.array(x_current).flatten())  
-observables_z = np.zeros((N_observables, 1))
-
-#aggiungi altre variabili in Q se aggiungi altri stati alla traiettoria
-#genera vettore di 1 di lunghezza N_observables
+observables_z = generate_observables(np.array(x_current[0:N_measurements]), order)
 
 Q = np.diag(np.ones(N_measurements))*5*10e5
 R = np.diag(np.ones(N_controls))
@@ -146,12 +139,12 @@ U_ref = df_controls[control_names_df].to_numpy().T
 total_time = 0
 
 #cambiare 0 con N per far andare l'MPC
-for t in range(0):
+for t in range(N):
     # print("t: ", t)
     opti = ca.Opti()
 
     p_opts = {"expand": True}
-    s_opts = {"max_iter": 1000, "tol": 1e-6, "print_level": 3}
+    s_opts = {"max_iter": 3000, "tol": 1e-6, "print_level": 3}
     opti.solver('ipopt', p_opts, s_opts)
 
     X_mpc = opti.variable(N_observables, M + 1)
@@ -165,10 +158,11 @@ for t in range(0):
         x_next = A @ x_k + B @ u_k
         opti.subject_to(X_mpc[:, k+1] == x_next)
 
-    # opti.subject_to(opti.bounded(u_min, U_mpc[:, :], u_max))
+    # for i in range(len(x_min)):
+    #     if x_min[i] != None && x_max[i] != None:
+    #         opti.subject_to(opti.bounded(x_min[i], X_mpc[i, :], x_max[i]))
 
-    # opti.subject_to(opti.bounded(4.5, U_mpc[0, :], 7))
-    # opti.subject_to(opti.bounded(-0.01, U_mpc[1:, :], 0.01))
+    opti.subject_to(opti.bounded(u_min, U_mpc[:, :], u_max))
     
     opti.subject_to(X_mpc[:, 0] == observables_z)
 

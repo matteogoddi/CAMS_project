@@ -2,3 +2,4 @@ casadi
 matplotlib
 pandas
 scipy
+scikit-learn

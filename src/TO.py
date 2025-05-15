@@ -23,15 +23,16 @@ from constants import *
 def TO(x_goal):
     """
     Trajectory Optimization function.
-    This function sets up and solves the trajectory optimization problem for a quadrotor model.
-    
+    This function sets up and solves the trajectory optimization problem for the desired model.
+
     Parameters:
     - x_goal: Desired goal state for the quadrotor.
-    
+
     Returns:
     - None
     """
     Q = np.diag(np.ones(N_states))
+    R = np.diag(np.ones(N_controls))
 
     opti = ca.Opti()
     X = opti.variable(N_states, N+1)
@@ -42,26 +43,26 @@ def TO(x_goal):
     for k in range(N):
         x_k = X[:, k]
         u_k = U[:, k]
-        
+
         k1 = f(x_k, u_k)
         k2 = f(x_k + dt/2 * k1, u_k)
         k3 = f(x_k + dt/2 * k2, u_k)
-        k4 = f(x_k + dt * k3, u_k) 
+        k4 = f(x_k + dt * k3, u_k)
         x_next = x_k + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
         opti.subject_to(X[:, k+1] == x_next)
 
+    for i in range(len(x_min)):
+        if x_min[i] != None:
+            opti.subject_to(opti.bounded(x_min[i], X[i, :], x_max[i]))
 
-    opti.subject_to(opti.bounded(4.5, U[0, :], 7))
-    opti.subject_to(opti.bounded(-0.1, U[1:, :], 0.1))
-
-    # opti.subject_to(opti.bounded(-0.2, X[6:9, :], 0.2))
-    # opti.subject_to(opti.bounded(-0.5, X[9:12, :], 0.5))
+    opti.subject_to(opti.bounded(u_min, U[:, :], u_max))
 
     cost = ca.mtimes([(X[:,N]-x_goal).T,Q,(X[:,N]-x_goal)])
+    # cost = ca.mtimes([(U[:,:]), R, (U[:,:]).T])
     opti.minimize(cost)
 
     p_opts = {"expand": True}
-    s_opts = {"max_iter": 1000, "tol": 1e-6, "print_level": 3}
+    s_opts = {"max_iter": 1000, "tol": 1e-6}
     opti.solver('ipopt', p_opts, s_opts)
 
     opti.set_initial(X, np.tile(x_init, (N+1, 1)).T)
@@ -82,8 +83,8 @@ def TO(x_goal):
     fig1.savefig("images/TO/states_plot.png", bbox_inches='tight')
     fig2.savefig("images/TO/controls_plot.png", bbox_inches='tight')
 
-    # ani = create_vehicle_animation(X_opt[0,:], X_opt[1,:], X_opt[2,:], X_opt[6,:], l_f=0.18, l_r=0.18, 
-    #                                track_width=0.3, interval=100, 
+    # ani = create_vehicle_animation(X_opt[0,:], X_opt[1,:], X_opt[2,:], X_opt[6,:], l_f=0.18, l_r=0.18,
+    #                                track_width=0.3, interval=100,
     #                                save_filename='videos/TO/vehicle_animation_final_cost.gif', fps=10, name = "Trajectory Vehicle Animation with $J = (X_N-X_g)^TQ(X_N-X_g)$")
 
     time_states = np.linspace(0, T, N+1)
@@ -96,5 +97,5 @@ def TO(x_goal):
     df_controls = pd.DataFrame(U_opt.T, columns=control_names_df)
     df_controls.insert(0, 'time (s)', time_controls)
     df_controls.to_csv("csv/TO/controls.csv", index=False)
-    
+
 
