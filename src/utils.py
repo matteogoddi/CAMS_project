@@ -9,6 +9,7 @@ from constants import *
 from itertools import combinations_with_replacement
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
+from casadi import SX, MX, vertcat
 
 def check_model(A, B, N_observables):
     """
@@ -43,112 +44,149 @@ def check_model(A, B, N_observables):
 
     return True
 
-def generate_observables(x, max_order=1, use_trig=True, return_len=False):
-    """
-    Generate polynomial observables up to a specified order.
-    Optionally include trigonometric functions.
-    """
+# def generate_observables(x, max_degree=1):
+#     """
+#     Generate polynomial observables up to a specified order.
+#     Optionally include trigonometric functions.
+#     """
 
-    #inizializza observables
-    observables = []
+#     #inizializza observables
+#     observables = [1.0]
 
-    # Polinomi fino al grado max_order
-    for order in range(1, max_order + 1):
-        for comb in combinations_with_replacement(range(len(x)), order):
-            term = np.prod([x[i] for i in comb])
-            observables.append(term)
+#     # Polinomi fino al grado max_degree
+#     for degree in range(1, max_degree + 1):
+#         for comb in combinations_with_replacement(range(len(x)), degree):
+#             term = np.prod([x[i] for i in comb])
+#             observables.append(term)
 
-    if model == 4:
+#     return np.array(observables)
 
-        if use_trig:
-            # for i in range(len(x)-3):
-            #     observables.append(ca.sin(x[i+3]))
-            #     observables.append(ca.cos(x[i+3]))
-            observables.append(ca.sin(x[4]))
-            observables.append(ca.cos(x[4]))
-            observables.append(ca.sin(x[5]))
-            observables.append(ca.cos(x[5]))
-            observables.append(ca.sin(x[6]))
-            observables.append(ca.cos(x[6]))
+# def lift(X, degree):
+#     return np.array([generate_observables(x, degree) for x in X])
 
-        observables.append(np.prod([x[6],x[6]]))
-        observables.append(np.prod([x[7],x[7]]))
-        observables.append(np.prod([x[8],x[8]]))
-        observables.append(np.prod([x[9],x[9]]))
-        observables.append(np.prod([x[10],x[10]]))
-        observables.append(np.prod([x[11],x[11]]))
+def is_casadi(x):
+    return isinstance(x, (SX, MX))
 
-        observables.append(np.prod([x[9],x[10]]))
-        observables.append(np.prod([x[9],x[11]]))
-        observables.append(np.prod([x[10],x[11]]))
-
-    if return_len:
-        return np.array(observables), len(observables)
+def generate_observables(x, degree):
+    if not is_casadi(x[0]):
+        # NumPy array
+        features = [1.0]
+        n = len(x)
+        for d in range(1, degree + 1):
+            for idx in combinations_with_replacement(range(n), d):
+                term = 1.0
+                for i in idx:
+                    term *= x[i]
+                features.append(term)
+        return np.array(features)
     else:
-        return np.array(observables)
+        # CasADi symbolic vector
+        # Coerentemente usa solo MX
+        x = ca.MX(x)  # forza tutto a MX
+        features = [ca.MX(1)]
+        n = x.shape[0]
+        for d in range(1, degree + 1):
+            for idx in combinations_with_replacement(range(n), d):
+                term = ca.MX(1)
+                for i in idx:
+                    term *= x[i]
+                features.append(term)
 
-def EDMD(Z,Y, N_observables):
+        return vertcat(*features) 
+
+def lift(X, degree):
+    if isinstance(X, (ca.MX, ca.SX)):
+        return ca.horzcat(*[generate_observables(X[:, i], degree) for i in range(X.shape[1])])
+    else:
+        return np.array([generate_observables(x, degree) for x in X])
+
+
+
+def edmdc(X, Y, U):
     """
     Perform SVD on the observables Z and Y.
     Computes the EDMD matrices A and B from the observables Z and Y.
     """
 
-    # YYT = Y @ Y.T  # Matrice simmetrica positiva
-    # eigvals, U_y = np.linalg.eig(YYT)  # Autovalori e autovettori di A^T A
-    # S_y = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
-    # Vh_y = ca.inv(S_y + 1e-6) @ np.conj(U_y.T) @ Y
+    phi = lambda C: lift(C, degree)
+    Phi_X = phi(X)
+    print("Phi_X shape: ", Phi_X.shape)
+    Phi_Y = phi(Y)
+    XU = np.hstack((Phi_X, U))
+    print("XU shape: ", XU.shape)
+
+    G = XU.T @ XU
+    A = XU.T @ Phi_Y
+    N_observables = Phi_X.shape[1]
+
+    KB = np.linalg.pinv(G) @ A
+
+    K = KB[:N_observables, :].T
+    B = KB[N_controls * -1:, :].T
+
+    return K, B, phi
+
+    # # YYT = Y @ Y.T  # Matrice simmetrica positiva
+    # # eigvals, U_y = np.linalg.eig(YYT)  # Autovalori e autovettori di A^T A
+    # # S_y = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
+    # # Vh_y = ca.inv(S_y + 1e-6) @ np.conj(U_y.T) @ Y
     
-    r = 0
-    U_y, S, Vh_y = np.linalg.svd(Y)
-    U_1 = U_y[:N_observables, :]
-    U_2 = U_y[N_observables:, :]
-    U_1 = U_1[:, :N_observables+N_controls-r]
-    U_2 = U_2[:, :N_observables+N_controls-r]
-    U_y = U_y[:, :N_observables+N_controls-r]
-    S = S[:N_observables+N_controls-r]
-    Vh_y = Vh_y[:N_observables+N_controls-r, :]
-    S_y = np.zeros((N_observables+N_controls-r, N_observables+N_controls-r))
-    np.fill_diagonal(S_y, S)
+    # r = 0
+    # U_y, S, Vh_y = np.linalg.svd(Y)
+    # U_1 = U_y[:N_observables, :]
+    # U_2 = U_y[N_observables:, :]
+    # U_1 = U_1[:, :N_observables+N_controls-r]
+    # U_2 = U_2[:, :N_observables+N_controls-r]
+    # U_y = U_y[:, :N_observables+N_controls-r]
+    # S = S[:N_observables+N_controls-r]
+    # Vh_y = Vh_y[:N_observables+N_controls-r, :]
+    # S_y = np.zeros((N_observables+N_controls-r, N_observables+N_controls-r))
+    # np.fill_diagonal(S_y, S)
 
-    # ZZT = Z @ Z.T  # Matrice simmetrica positiva
-    # eigvals, U_z = np.linalg.eig(ZZT)  # Autovalori e autovettori di A^T A
-    # S_z = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
-    # Vh_z = ca.inv(S_z + 1e-6) @ np.conj(U_z.T) @ Z
+    # # ZZT = Z @ Z.T  # Matrice simmetrica positiva
+    # # eigvals, U_z = np.linalg.eig(ZZT)  # Autovalori e autovettori di A^T A
+    # # S_z = ca.diag(ca.sqrt(ca.fmax(eigvals, 0)))  # fmax evita radici negative
+    # # Vh_z = ca.inv(S_z + 1e-6) @ np.conj(U_z.T) @ Z
 
-    U_z, S, Vh_z = np.linalg.svd(Z)
-    S_z = np.zeros((Z.shape[0], Z.shape[1]))
-    np.fill_diagonal(S_z, S)
+    # U_z, S, Vh_z = np.linalg.svd(Z)
+    # S_z = np.zeros((Z.shape[0], Z.shape[1]))
+    # np.fill_diagonal(S_z, S)
 
-    S_y_inv = np.linalg.inv(S_y)
-    #compute A,B
-    # A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T) @ U_z
-    # B = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
-    A = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T)
-    B = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
+    # S_y_inv = np.linalg.inv(S_y)
+    # #compute A,B
+    # # A = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T) @ U_z
+    # # B = np.conj(U_z.T) @ Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
+    # A = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_1.T)
+    # B = Z @ np.conj(Vh_y.T) @ S_y_inv @ np.conj(U_2.T)
 
-    G = Z @ np.linalg.pinv(Y)
+    # H = Y.T @ Y
+    # L = Y.T @ Z
+
+    # # Risolvi il sistema per ottenere l'operatore di Koopman
+    # G = np.linalg.pinv(H) @ L
+    # # G = Z @ np.linalg.pinv(Y)
     
-    # G = LinearRegression(fit_intercept=False)
-    # G.fit(Y, Z)
+    # # G = LinearRegression(fit_intercept=False)
+    # # G.fit(Y, Z)
 
-    A = G[:, :N_observables]
-    B = G[:, N_observables:]
+    # A = G[:, :N_observables]
+    # B = G[:, N_observables:]
 
-    if np.all(np.abs(np.imag(A)) < 1e-10):
-        A = np.real(A)
-    else:
-        raise ValueError("A ha parte immaginaria significativa!")
+    # if np.all(np.abs(np.imag(A)) < 1e-10):
+    #     A = np.real(A)
+    # else:
+    #     raise ValueError("A ha parte immaginaria significativa!")
 
-    if np.all(np.abs(np.imag(B)) < 1e-10):
-        B = np.real(B)
-    else:
-        raise ValueError("B ha parte immaginaria significativa!")
+    # if np.all(np.abs(np.imag(B)) < 1e-10):
+    #     B = np.real(B)
+    # else:
+    #     raise ValueError("B ha parte immaginaria significativa!")
 
 
-    A = np.array(A, dtype=float)
-    B = np.array(B, dtype=float)
+    # A = np.array(A, dtype=float)
+    # B = np.array(B, dtype=float)
 
-    return A,B
+    # return A,B
 
 def f(in1, in2):
     """

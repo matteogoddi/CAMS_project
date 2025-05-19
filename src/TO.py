@@ -62,7 +62,7 @@ def TO(x_goal):
     opti.minimize(cost)
 
     p_opts = {"expand": True}
-    s_opts = {"max_iter": 1000, "tol": 1e-6}
+    s_opts = {"max_iter": 1000, "tol": 1e-6, "print_level": 3}
     opti.solver('ipopt', p_opts, s_opts)
 
     opti.set_initial(X, np.tile(x_init, (N+1, 1)).T)

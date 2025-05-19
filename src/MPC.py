@@ -164,7 +164,7 @@ for t in range(N):
 
     opti.subject_to(opti.bounded(u_min, U_mpc[:, :], u_max))
     
-    opti.subject_to(X_mpc[:, 0] == observables_z)
+    # opti.subject_to(X_mpc[:, 0] == observables_z)
 
     tracking_cost = 0
     for k in range(M + 1):

@@ -19,10 +19,9 @@ if (model == 1):
     dt = 1 / FREQ #time step
     T = N * dt #time horizon
     M = 20 #MPC horizon
-    m = 350 #DMD horizon
+    m = 250 #DMD horizon
     N_measurements = 2 #number of states measured
-    order = 3 #order of the observables
-    undersampling = 1 #undersampling factor
+    degree = 3 #degree of the observables
 
     #state bounds
     x_min = [-1.5, None, -1, -1]
@@ -33,7 +32,7 @@ if (model == 1):
     u_max = [0.01, 0.01]
 
     x_init = [0, 0, 0, 0]
-    x_goal = [1, 3*np.pi, 0, 0]
+    x_goal = [1, np.pi, 0, 0]
 
     states_names_df   = ['q1 (m)', 'q2 (m)', 'q3 (rad)', 'q4 (rad)']
     control_names_df = ['U_1 (N)', 'U_2 (N)']
@@ -50,7 +49,7 @@ elif (model == 2):
     M = 15 #MPC horizon
     m = 1000 #DMD horizon
     N_measurements = 3 #number of states measured
-    order = 2 #order of the observables
+    degree = 2 #degree of the observables
 
     # control input bounds
     u_min = -0.1
@@ -74,8 +73,7 @@ elif (model == 3):
     M = 15 #MPC horizon
     m = 600 #DMD horizon
     N_measurements = 3 #number of states measured
-    order = 2 #order of the observables
-    undersampling = 1 #undersampling factor
+    degree = 2 #degree of the observables
 
     #state bounds
     x_min = [None, None, None, None, None, None]
@@ -97,21 +95,24 @@ elif (model == 3):
 elif (model == 4):
 
     N = 300 #number of time steps
-    FREQ = 30 #frequency of the sampling
+    FREQ = 50 #frequency of the sampling
     dt = 1 / FREQ #time step
     T = N * dt #time horizon
-    M = 30 #MPC horizon
-    m = 800 #DMD horizon
-    undersampling = 5 #undersampling factor
-    N_measurements = 12 #number of states measured
-    order = 1 #order of the observables
+    M = 20 #MPC horizon
+    m = 500 #DMD horizon
+    N_measurements = 6 #number of states measured
+    degree = 2 #degree of the observables
+
+    #state bounds
+    x_min = [None, None, None, None, None, None]
+    x_max = [None, None, None, None, None, None]
 
     # control input bounds
-    u_min = -7
-    u_max = 7
+    u_min = [4, -0.01, -0.01, -0.01]
+    u_max = [6, 0.01, 0.01, 0.01]
 
-    x_init = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    
+    x_init = np.zeros(12)
+    x_goal = [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     states_names_df   = ['X (m)', 'Y (m)', 'Z (m)', 'phi (rad)', 'theta (rad)', 'psi (rad)',
         'v_x (m/s)', 'v_y (m/s)', 'v_z (m/s)', 'p (rad/s)', 'q (rad/s)', 'r (rad/s)']
@@ -130,8 +131,7 @@ elif (model == 5):
     M = 60 #MPC horizon
     m = 600 #DMD horizon
     N_measurements = 2 #number of states measured
-    order = 1 #order of the observables
-    undersampling = 1 #undersampling factor
+    degree = 1 #degree of the observables
 
     #state bounds
     x_min = [None, None]
